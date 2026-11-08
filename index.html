@@ -531,7 +531,9 @@ function openNumSheet(p, lbl) {
   $('numInp').value = lbl ? lbl.value : '';
   $('numDel').style.display = lbl ? 'block' : 'none';
   $('numScrim').classList.add('open');
-  setTimeout(() => $('numInp').focus(), 60);
+  // فوکوس هم‌گام با لمس کاربر تا کیبورد آیفون خودکار بالا بیاد
+  try { $('numInp').focus({ preventScroll: true }); } catch (e) { $('numInp').focus(); }
+  setTimeout(() => { if (document.activeElement !== $('numInp')) $('numInp').focus(); }, 80);
 }
 function closeNumSheet() {
   $('numInp').blur();
