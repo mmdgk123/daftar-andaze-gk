@@ -193,6 +193,7 @@
       <button class="tool" data-tool="num"><span class="ti">🔢</span>عدد</button>
       <button class="tool" data-tool="erase"><span class="ti">🧽</span>پاک‌کن</button>
       <button class="tool" id="undoBtn"><span class="ti">↩️</span>واگرد</button>
+      <button class="tool" id="flipBtn"><span class="ti">⇋</span>برگردوندن</button>
       <button class="tool danger" id="clearBtn"><span class="ti">🗑️</span>پاک‌کردن</button>
     </div>
 
@@ -420,6 +421,19 @@ $('clearBtn').onclick = () => {
   if (!cur.strokes.length && !cur.labels.length) return;
   if (!confirm('همه خط‌ها و عددهای این برگه پاک بشن؟')) return;
   pushHistory(); cur.strokes = []; cur.labels = []; render(); saveCur();
+};
+/* برگردوندن آینه‌ای نقشه (چپ و راست عوض می‌شن) — برای وقتی نقشه از پشت صفحه کشیده شده
+   و صفحه برای برش رو به روست؛ با هر زدن دوباره برمی‌گرده. */
+let flipTimer = null;
+$('flipBtn').onclick = () => {
+  if (!cur.strokes.length && !cur.labels.length) return;
+  pushHistory();
+  cur.strokes.forEach(st => st.points.forEach(p => { p[0] = 1 - p[0]; }));
+  cur.labels.forEach(l => { l.x = 1 - l.x; });
+  render(); saveCur(false);
+  $('savedLbl').textContent = 'نقشه برگردونده شد ⇋';
+  clearTimeout(flipTimer);
+  flipTimer = setTimeout(() => $('savedLbl').textContent = '', 1600);
 };
 
 /* ===== کشیدن ===== */
