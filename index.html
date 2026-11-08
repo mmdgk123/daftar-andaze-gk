@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#047857">
+<title>دفتر اندازه کناف</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Vazirmatn', Tahoma, sans-serif;
+    background: #f4f6f5; color: #14201b;
+    min-height: 100dvh;
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; }
+  input, textarea, select { font-family: inherit; }
+
+  /* ---------- هدر ---------- */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    background: #047857; color: #fff;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 12px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 2px 10px rgba(4,120,87,.25);
+  }
+  header .back { font-size: 22px; color: #fff; padding: 2px 6px; display: none; }
+  header h1 { font-size: 18px; font-weight: 800; margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .pill { font-size: 11px; opacity: .85; font-weight: 500; }
+
+  main { padding: 14px 14px 110px; max-width: 640px; margin: 0 auto; }
+
+  /* ---------- فهرست برگه‌ها ---------- */
+  .empty {
+    text-align: center; color: #5b6b64; padding: 56px 20px; line-height: 2;
+    font-size: 15px;
+  }
+  .empty .big { font-size: 44px; display: block; margin-bottom: 6px; }
+  .card {
+    background: #fff; border: 1px solid #e2e8e5; border-radius: 16px;
+    padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 1px 3px rgba(16,40,30,.05); text-align: right; width: 100%;
+  }
+  .card .ic {
+    width: 44px; height: 44px; border-radius: 12px; flex: none;
+    background: #ecfdf5; display: flex; align-items: center; justify-content: center; font-size: 22px;
+  }
+  .card .t { flex: 1; min-width: 0; }
+  .card .t b { display: block; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .t span { font-size: 12px; color: #6b7a73; }
+  .card .del { color: #dc2626; font-size: 19px; padding: 8px; flex: none; }
+
+  .fab {
+    position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); inset-inline-start: 50%;
+    transform: translateX(50%);
+    background: #047857; color: #fff; font-size: 16px; font-weight: 700;
+    padding: 14px 26px; border-radius: 999px; box-shadow: 0 8px 22px rgba(4,120,87,.4);
+    z-index: 30;
+  }
+  [dir="rtl"] .fab { transform: translateX(50%); }
+
+  /* ---------- ویرایشگر ---------- */
+  #editorView { display: none; }
+  .meta-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .meta-row input[type="text"] {
+    flex: 1; min-width: 0; border: 1.5px solid #d7e0db; border-radius: 12px;
+    padding: 10px 12px; font-size: 15px; background: #fff; outline: none;
+  }
+  .meta-row input[type="text"]:focus { border-color: #047857; }
+  .chips { display: flex; gap: 6px; margin-bottom: 10px; }
+  .chip {
+    padding: 7px 14px; border-radius: 999px; border: 1.5px solid #d7e0db;
+    background: #fff; font-size: 13.5px; font-weight: 500; color: #43554d;
+  }
+  .chip.on { background: #047857; border-color: #047857; color: #fff; }
+
+  .canvas-wrap {
+    position: relative; border-radius: 16px; overflow: hidden;
+    border: 1.5px solid #cfdcd5; background: #fff;
+    height: min(58dvh, 520px); touch-action: none;
+  }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .lbl {
+    position: absolute; transform: translate(-50%, -50%);
+    background: #065f46; color: #fff; font-size: 13px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(6,60,44,.35); user-select: none; -webkit-user-select: none;
+    touch-action: none; z-index: 5;
+  }
+  .hint {
+    position: absolute; bottom: 8px; inset-inline: 0; text-align: center;
+    font-size: 12px; color: #7a8a82; pointer-events: none; z-index: 4;
+  }
+
+  .toolbar {
+    display: flex; gap: 6px; margin-top: 10px; background: #fff;
+    border: 1px solid #e2e8e5; border-radius: 14px; padding: 8px;
+  }
+  .tool {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 8px 2px; border-radius: 10px; font-size: 11.5px; font-weight: 500; color: #43554d;
+  }
+  .tool .ti { font-size: 19px; line-height: 1; }
+  .tool.on { background: #ecfdf5; color: #047857; }
+  .tool.danger { color: #dc2626; }
+
+  .opts { display: flex; gap: 14px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+  .opts .grp { display: flex; gap: 6px; align-items: center; }
+  .sw {
+    width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid #fff;
+    box-shadow: 0 0 0 1.5px #c8d4cd; padding: 0;
+  }
+  .sw.on { box-shadow: 0 0 0 2.5px #047857; }
+  .wd {
+    border: 1.5px solid #d7e0db; background: #fff; border-radius: 8px;
+    padding: 5px 10px; font-size: 12px; font-weight: 700; color: #43554d;
+  }
+  .wd.on { border-color: #047857; color: #047857; background: #ecfdf5; }
+
+  .totals {
+    margin-top: 12px; background: #065f46; color: #fff; border-radius: 14px;
+    padding: 12px 16px; display: flex; gap: 10px; text-align: center;
+  }
+  .totals .cell { flex: 1; }
+  .totals .v { font-size: 21px; font-weight: 800; display: block; }
+  .totals .k { font-size: 11.5px; opacity: .85; }
+
+  textarea.note {
+    width: 100%; margin-top: 10px; border: 1.5px solid #d7e0db; border-radius: 12px;
+    padding: 10px 12px; font-size: 14px; min-height: 58px; resize: vertical; outline: none; background: #fff;
+  }
+  textarea.note:focus { border-color: #047857; }
+  .saved { text-align: center; font-size: 12px; color: #6b7a73; margin-top: 8px; min-height: 16px; }
+
+  /* ---------- شیت پایین ---------- */
+  .scrim {
+    position: fixed; inset: 0; background: rgba(10,25,20,.45); z-index: 40;
+    display: none; align-items: flex-end; justify-content: center;
+  }
+  .scrim.open { display: flex; }
+  .sheet {
+    background: #fff; width: 100%; max-width: 640px; border-radius: 20px 20px 0 0;
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+    animation: up .22s ease;
+  }
+  @keyframes up { from { transform: translateY(30px); opacity: .6; } to { transform: none; opacity: 1; } }
+  .sheet h3 { margin: 0 0 12px; font-size: 16px; }
+  .sheet input[type="text"], .sheet input[type="number"] {
+    width: 100%; border: 1.5px solid #d7e0db; border-radius: 12px;
+    padding: 12px; font-size: 17px; outline: none; margin-bottom: 10px;
+  }
+  .sheet input:focus { border-color: #047857; }
+  .sheet .row { display: flex; gap: 8px; }
+  .btn {
+    flex: 1; padding: 13px; border-radius: 12px; font-size: 15px; font-weight: 700;
+    background: #eef2f0; color: #33463d;
+  }
+  .btn.pri { background: #047857; color: #fff; }
+  .btn.del { background: #fef2f2; color: #dc2626; }
+</style>
+</head>
+<body>
+
+<header>
+  <button class="back" id="backBtn" aria-label="برگشت">›</button>
+  <h1 id="hdrTitle">دفتر اندازه کناف</h1>
+  <span class="pill">mmdGK</span>
+</header>
+
+<main>
+  <!-- فهرست -->
+  <section id="listView">
+    <div id="listBox"></div>
+  </section>
+
+  <!-- ویرایشگر -->
+  <section id="editorView">
+    <div class="canvas-wrap" id="wrap">
+      <canvas id="cv"></canvas>
+      <div class="hint" id="hint">با انگشت شکل رو بکش</div>
+    </div>
+
+    <div class="toolbar">
+      <button class="tool on" data-tool="pen"><span class="ti">✏️</span>قلم</button>
+      <button class="tool" data-tool="num"><span class="ti">🔢</span>عدد</button>
+      <button class="tool" data-tool="erase"><span class="ti">🧽</span>پاک‌کن</button>
+      <button class="tool" id="undoBtn"><span class="ti">↩️</span>واگرد</button>
+      <button class="tool danger" id="clearBtn"><span class="ti">🗑️</span>پاک‌کردن</button>
+    </div>
+
+    <div class="opts">
+      <div class="grp" id="colors">
+        <button class="sw on" data-c="#065f46" style="background:#065f46" aria-label="سبز"></button>
+        <button class="sw" data-c="#dc2626" style="background:#dc2626" aria-label="قرمز"></button>
+        <button class="sw" data-c="#2563eb" style="background:#2563eb" aria-label="آبی"></button>
+        <button class="sw" data-c="#111827" style="background:#111827" aria-label="مشکی"></button>
+      </div>
+      <div class="grp" id="widths">
+        <button class="wd" data-w="2">نازک</button>
+        <button class="wd on" data-w="3.5">معمولی</button>
+        <button class="wd" data-w="6">ضخیم</button>
+      </div>
+    </div>
+
+    <div class="totals">
+      <div class="cell"><span class="v" id="sumM">۰</span><span class="k">مجموع اندازه‌ها (متر)</span></div>
+      <div class="cell"><span class="v" id="sheetsExact">۰</span><span class="k">ورق دقیق (÷۳)</span></div>
+      <div class="cell"><span class="v" id="sheetsNeed">۰</span><span class="k">ورق لازم</span></div>
+    </div>
+
+    <textarea class="note" id="noteInp" placeholder="یادداشت این برگه… (مثلاً: دریچه ۶۰×۶۰ دو تا)"></textarea>
+    <div class="saved" id="savedLbl"></div>
+  </section>
+</main>
+
+<button class="fab" id="newBtn">＋ برگه تازه</button>
+
+<!-- شیت: عدد -->
+<div class="scrim" id="numScrim">
+  <div class="sheet">
+    <h3 id="numTitle">اندازه به سانتیمتر</h3>
+    <input type="number" id="numInp" inputmode="decimal" step="0.1" placeholder="مثلاً ۱۱۹٫۵">
+    <div class="row">
+      <button class="btn pri" id="numOk">ثبت</button>
+      <button class="btn del" id="numDel" style="display:none">حذف عدد</button>
+      <button class="btn" id="numCancel">لغو</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ===== ابزار عدد فارسی ===== */
+const FA = '۰۱۲۳۴۵۶۷۸۹';
+const toFa = s => String(s).replace(/[0-9]/g, d => FA[d]).replace(/\./g, '٫');
+const fmt = (n, dec = 2) => {
+  let v = Math.round(n * 100) / 100;
+  let s = (dec === 0) ? String(Math.round(v)) : String(v);
+  return toFa(s);
+};
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ===== ذخیره‌سازی ===== */
+const KEY = 'kanaf-notebook-v1';
+let sheets = [];
+try { sheets = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { sheets = []; }
+function persist() { localStorage.setItem(KEY, JSON.stringify(sheets)); }
+
+/* ===== وضعیت ===== */
+let cur = null;            // برگه فعلی
+let tool = 'pen';
+let color = '#065f46', widthPt = 3.5;
+let history = [];
+
+/* ===== المان‌ها ===== */
+const $ = id => document.getElementById(id);
+const listView = $('listView'), editorView = $('editorView'), listBox = $('listBox');
+const wrap = $('wrap'), cv = $('cv'), ctx = cv.getContext('2d');
+const hint = $('hint');
+
+/* ===== فهرست ===== */
+function renderList() {
+  listView.style.display = 'block'; editorView.style.display = 'none';
+  $('newBtn').style.display = 'block'; $('backBtn').style.display = 'none';
+  $('hdrTitle').textContent = 'دفتر اندازه کناف';
+  if (!sheets.length) {
+    listBox.innerHTML = '<div class="empty"><span class="big">📐</span>هنوز برگه‌ای نداری.<br>با دکمه «برگه تازه» برای هر کار یه برگه باز کن،<br>شکل رو بکش و اندازه‌ها رو روش بنویس.</div>';
+    return;
+  }
+  listBox.innerHTML = '';
+  [...sheets].sort((a, b) => b.updatedAt - a.updatedAt).forEach(sh => {
+    const totalCm = sh.labels.reduce((s, l) => s + (+l.value || 0), 0);
+    const dc = new Date(sh.createdAt), du = new Date(sh.updatedAt);
+    const nameStr = toFa(dc.toLocaleDateString('fa-IR')) + ' · ساعت ' + toFa(dc.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }));
+    const dateStr = toFa(du.toLocaleDateString('fa-IR'));
+    const card = document.createElement('button');
+    card.className = 'card';
+    card.innerHTML = '<div class="ic">📐</div>' +
+      '<div class="t"><b></b><span>آخرین ویرایش: ' + dateStr + (totalCm ? ' · مجموع ' + fmt(totalCm / 100) + ' متر' : '') + '</span></div>';
+    card.querySelector('b').textContent = nameStr;
+    const del = document.createElement('span');
+    del.className = 'del'; del.textContent = '🗑';
+    del.onclick = e => {
+      e.stopPropagation();
+      if (confirm('این برگه پاک بشه؟')) { sheets = sheets.filter(s => s.id !== sh.id); persist(); renderList(); }
+    };
+    card.appendChild(del);
+    card.onclick = () => openSheet(sh.id);
+    listBox.appendChild(card);
+  });
+}
+
+/* ===== ساخت و باز کردن برگه ===== */
+$('newBtn').onclick = () => {
+  const sh = { id: uid(), note: '', strokes: [], labels: [], createdAt: Date.now(), updatedAt: Date.now() };
+  sheets.push(sh); persist(); openSheet(sh.id);
+};
+
+function openSheet(id) {
+  cur = sheets.find(s => s.id === id); if (!cur) return;
+  history = [];
+  listView.style.display = 'none'; editorView.style.display = 'block';
+  $('newBtn').style.display = 'none'; $('backBtn').style.display = 'block';
+  $('hdrTitle').textContent = 'برگه اندازه';
+  $('noteInp').value = cur.note || '';
+  setTool('pen');
+  requestAnimationFrame(() => { resizeCanvas(); render(); });
+}
+$('backBtn').onclick = () => { saveCur(); renderList(); };
+
+$('noteInp').addEventListener('input', e => { cur.note = e.target.value; saveCur(false); });
+
+let savedTimer = null;
+function saveCur(showTick = true) {
+  if (!cur) return;
+  cur.updatedAt = Date.now(); persist();
+  if (showTick) {
+    $('savedLbl').textContent = 'ذخیره شد ✓';
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => $('savedLbl').textContent = '', 1400);
+  }
+}
+
+/* ===== بوم ===== */
+function resizeCanvas() {
+  const r = wrap.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  render();
+}
+window.addEventListener('resize', resizeCanvas);
+
+function drawGrid(w, h) {
+  const step = 24 * (window.devicePixelRatio || 1);
+  ctx.strokeStyle = '#e3ece7'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = step; x < w; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+  for (let y = step; y < h; y += step) { ctx.moveTo(0, y); ctx.lineTo(w, y); }
+  ctx.stroke();
+}
+
+function render() {
+  if (!cur) return;
+  const w = cv.width, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  drawGrid(w, h);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  cur.strokes.forEach(st => {
+    ctx.strokeStyle = st.color; ctx.lineWidth = st.width * (window.devicePixelRatio || 1);
+    ctx.beginPath();
+    st.points.forEach((p, i) => {
+      const x = p[0] * w, y = p[1] * h;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    if (st.points.length === 1) ctx.lineTo(st.points[0][0] * w + 0.1, st.points[0][1] * h + 0.1);
+    ctx.stroke();
+  });
+  renderLabels(); updateTotals();
+  hint.style.display = (cur.strokes.length || cur.labels.length) ? 'none' :
+    'block';
+  hint.textContent = tool === 'num' ? 'روی شکل، کنار لبه‌ای که اندازه‌اش رو می‌خوای بنویسی، بزن' : 'با انگشت شکل رو بکش';
+}
+
+function renderLabels() {
+  wrap.querySelectorAll('.lbl').forEach(e => e.remove());
+  cur.labels.forEach(l => {
+    const el = document.createElement('div');
+    el.className = 'lbl'; el.textContent = fmt(+l.value || 0, 1);
+    el.style.left = (l.x * 100) + '%'; el.style.top = (l.y * 100) + '%';
+    el.dataset.id = l.id;
+    wrap.appendChild(el);
+  });
+}
+
+function updateTotals() {
+  const sumCm = cur.labels.reduce((s, l) => s + (+l.value || 0), 0);
+  const m = sumCm / 100;
+  $('sumM').textContent = fmt(m);
+  $('sheetsExact').textContent = fmt(m / 3);
+  $('sheetsNeed').textContent = toFa(Math.ceil(m / 3 || 0));
+}
+
+/* ===== ابزارها ===== */
+function setTool(t) {
+  tool = t;
+  document.querySelectorAll('.tool[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  render();
+}
+document.querySelectorAll('.tool[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+document.querySelectorAll('#colors .sw').forEach(b => b.onclick = () => {
+  color = b.dataset.c;
+  document.querySelectorAll('#colors .sw').forEach(x => x.classList.toggle('on', x === b));
+  setTool('pen');
+});
+document.querySelectorAll('#widths .wd').forEach(b => b.onclick = () => {
+  widthPt = +b.dataset.w;
+  document.querySelectorAll('#widths .wd').forEach(x => x.classList.toggle('on', x === b));
+});
+
+function pushHistory() {
+  history.push(JSON.stringify({ strokes: cur.strokes, labels: cur.labels }));
+  if (history.length > 40) history.shift();
+}
+$('undoBtn').onclick = () => {
+  const last = history.pop(); if (!last) return;
+  const s = JSON.parse(last); cur.strokes = s.strokes; cur.labels = s.labels;
+  render(); saveCur();
+};
+$('clearBtn').onclick = () => {
+  if (!cur.strokes.length && !cur.labels.length) return;
+  if (!confirm('همه خط‌ها و عددهای این برگه پاک بشن؟')) return;
+  pushHistory(); cur.strokes = []; cur.labels = []; render(); saveCur();
+};
+
+/* ===== کشیدن ===== */
+let drawing = null, downAt = null;
+function pos(e) {
+  const r = wrap.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, cx: e.clientX - r.left, cy: e.clientY - r.top };
+}
+
+cv.addEventListener('pointerdown', e => {
+  if (!cur) return;
+  const p = pos(e); downAt = p;
+  if (tool === 'pen') {
+    preStroke = JSON.stringify({ strokes: cur.strokes, labels: cur.labels });
+    drawing = { color, width: widthPt, points: [[p.x, p.y]] };
+    cur.strokes.push(drawing);
+    cv.setPointerCapture(e.pointerId);
+    render();
+  }
+});
+cv.addEventListener('pointermove', e => {
+  if (!drawing) return;
+  const p = pos(e), last = drawing.points[drawing.points.length - 1];
+  if (Math.hypot(p.x - last[0], p.y - last[1]) > 0.004) { drawing.points.push([p.x, p.y]); render(); }
+});
+cv.addEventListener('pointerup', e => {
+  const p = pos(e);
+  if (drawing) {
+    if (drawing.points.length < 2) { cur.strokes.pop(); preStroke = null; } else pushHistoryBefore();
+    drawing = null; render(); saveCur(); return;
+  }
+  const wasTap = downAt && Math.hypot(p.x - downAt.x, p.y - downAt.y) < 0.02;
+  if (!wasTap) return;
+  if (tool === 'num') openNumSheet(p, null);
+  else if (tool === 'erase') eraseAt(p);
+});
+
+/* نسخه قبل از شروع هر خط برای واگرد نگه داشته می‌شود */
+let preStroke = null;
+function pushHistoryBefore() { if (preStroke) { history.push(preStroke); if (history.length > 40) history.shift(); preStroke = null; } }
+
+function eraseAt(p) {
+  const li = cur.labels.findIndex(l => Math.hypot(l.x - p.x, l.y - p.y) < 0.07);
+  if (li >= 0) { pushHistory(); cur.labels.splice(li, 1); render(); saveCur(); return; }
+  const si = cur.strokes.findIndex(st => st.points.some(pt => Math.hypot(pt[0] - p.x, pt[1] - p.y) < 0.045));
+  if (si >= 0) { pushHistory(); cur.strokes.splice(si, 1); render(); saveCur(); }
+}
+
+/* ===== برچسب عدد: لمس برای ویرایش، کشیدن برای جابه‌جایی ===== */
+let dragLbl = null, dragMoved = false, dragStart = null;
+wrap.addEventListener('pointerdown', e => {
+  const el = e.target.closest('.lbl'); if (!el || !cur) return;
+  const l = cur.labels.find(x => x.id === el.dataset.id); if (!l) return;
+  dragLbl = l; dragMoved = false; dragStart = pos(e);
+  el.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+wrap.addEventListener('pointermove', e => {
+  if (!dragLbl) return;
+  const p = pos(e);
+  if (Math.hypot(p.x - dragStart.x, p.y - dragStart.y) > 0.015) dragMoved = true;
+  if (dragMoved) { dragLbl.x = Math.min(0.98, Math.max(0.02, p.x)); dragLbl.y = Math.min(0.97, Math.max(0.03, p.y)); renderLabels(); }
+});
+wrap.addEventListener('pointerup', e => {
+  if (!dragLbl) return;
+  if (dragMoved) saveCur(); else openNumSheet(null, dragLbl);
+  dragLbl = null;
+});
+
+/* ===== شیت عدد ===== */
+let pendingPos = null, editingLbl = null;
+function openNumSheet(p, lbl) {
+  pendingPos = p; editingLbl = lbl;
+  $('numTitle').textContent = lbl ? 'ویرایش اندازه (سانتیمتر)' : 'اندازه به سانتیمتر';
+  $('numInp').value = lbl ? lbl.value : '';
+  $('numDel').style.display = lbl ? 'block' : 'none';
+  $('numScrim').classList.add('open');
+  setTimeout(() => $('numInp').focus(), 60);
+}
+function closeNumSheet() { $('numScrim').classList.remove('open'); }
+$('numCancel').onclick = closeNumSheet;
+$('numScrim').addEventListener('click', e => { if (e.target === $('numScrim')) closeNumSheet(); });
+$('numOk').onclick = () => {
+  const v = parseFloat(String($('numInp').value).replace(/[۰-۹]/g, d => FA.indexOf(d)));
+  if (isNaN(v) || v <= 0) { closeNumSheet(); return; }
+  pushHistory();
+  if (editingLbl) editingLbl.value = v;
+  else cur.labels.push({ id: uid(), x: pendingPos.x, y: pendingPos.y, value: v });
+  closeNumSheet(); render(); saveCur();
+};
+$('numDel').onclick = () => {
+  if (!editingLbl) return;
+  pushHistory();
+  cur.labels = cur.labels.filter(l => l.id !== editingLbl.id);
+  closeNumSheet(); render(); saveCur();
+};
+
+/* ===== شروع ===== */
+renderList();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
