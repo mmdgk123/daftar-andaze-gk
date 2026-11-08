@@ -300,7 +300,7 @@ function renderList() {
     return;
   }
   listBox.innerHTML = '';
-  const grandM = sheets.reduce((s, sh) => s + sheetAreaM(sh.labels), 0);
+  const grandM = sheets.reduce((s, sh) => s + sheetAreaM(sh.labels, sh.strokes), 0);
   const head = document.createElement('div');
   head.className = 'list-head';
   head.innerHTML = '<div class="grand-total"><span class="k">متراژ کل همه برگه‌ها</span><span class="v">' + fmt(grandM) + ' متر</span></div>';
@@ -312,7 +312,7 @@ function renderList() {
   head.appendChild(delAll);
   listBox.appendChild(head);
   [...sheets].sort((a, b) => b.updatedAt - a.updatedAt).forEach(sh => {
-    const areaM = sheetAreaM(sh.labels);
+    const areaM = sheetAreaM(sh.labels, sh.strokes);
     const dc = new Date(sh.createdAt), du = new Date(sh.updatedAt);
     const nameStr = toFa(dc.toLocaleDateString('fa-IR')) + ' · ساعت ' + toFa(dc.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }));
     const dateStr = toFa(du.toLocaleDateString('fa-IR'));
@@ -411,17 +411,50 @@ function renderLabels() {
   });
 }
 
-/* متراژ: اندازه‌ها دوتا دوتا (طول × عرض هر تیکه) ضرب و جمع می‌شن — خروجی به متر */
-function sheetAreaM(labels) {
-  let cm2 = 0;
-  for (let i = 0; i + 1 < labels.length; i += 2) cm2 += (+labels[i].value || 0) * (+labels[i + 1].value || 0);
-  return cm2 / 10000;
+/* متراژ یک شکل: برچسب روی لبه‌های بالا/پایین = طول، روی لبه‌های چپ/راست = عرض؛
+   متراژ = بزرگ‌ترین طول × بزرگ‌ترین عرض (اضلاع روبه‌رو تکراری حساب نمی‌شن).
+   اگه لبه‌ها مشخص نباشن: اندازه‌ها جفت‌جفت ضرب و جمع می‌شن. */
+function sheetAreaInfo(labels, strokes) {
+  labels = labels || [];
+  if (!labels.length) return { m: 0, len: 0, wid: 0, mode: 'none' };
+  let info = null;
+  if (strokes && strokes.length) {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0, any = false;
+    strokes.forEach(st => (st.points || []).forEach(pt => {
+      any = true;
+      if (pt[0] < minX) minX = pt[0];
+      if (pt[0] > maxX) maxX = pt[0];
+      if (pt[1] < minY) minY = pt[1];
+      if (pt[1] > maxY) maxY = pt[1];
+    }));
+    if (any && maxX > minX && maxY > minY) {
+      const hs = [], vs = [];
+      labels.forEach(l => {
+        const dH = Math.min(l.y - minY, maxY - l.y);
+        const dV = Math.min(l.x - minX, maxX - l.x);
+        (dH <= dV ? hs : vs).push(+l.value || 0);
+      });
+      if (hs.length && vs.length) {
+        const len = Math.max.apply(null, hs), wid = Math.max.apply(null, vs);
+        info = { m: len * wid / 10000, len: len, wid: wid, mode: 'rect' };
+      }
+    }
+  }
+  if (!info) {
+    let cm2 = 0;
+    for (let i = 0; i + 1 < labels.length; i += 2) cm2 += (+labels[i].value || 0) * (+labels[i + 1].value || 0);
+    info = { m: cm2 / 10000, len: 0, wid: 0, mode: 'pairs' };
+  }
+  return info;
 }
+function sheetAreaM(labels, strokes) { return sheetAreaInfo(labels, strokes).m; }
 
 function updateTotals() {
-  const m = sheetAreaM(cur.labels);
-  $('areaM').textContent = fmt(m);
-  $('pairHint').textContent = (cur.labels.length % 2 === 1) ? 'یه اندازه جفت نداره و تو متراژ حساب نشده' : '';
+  const info = sheetAreaInfo(cur.labels, cur.strokes);
+  $('areaM').textContent = fmt(info.m);
+  if (info.mode === 'rect') $('pairHint').textContent = 'طول ' + fmt(info.len) + ' × عرض ' + fmt(info.wid);
+  else if (cur.labels.length % 2 === 1) $('pairHint').textContent = 'یه اندازه جفت نداره و تو متراژ حساب نشده';
+  else $('pairHint').textContent = '';
 }
 
 /* ===== ابزارها ===== */
