@@ -60,12 +60,6 @@
   .card .del { color: #dc2626; font-size: 19px; padding: 8px; flex: none; }
 
   .list-head { margin-bottom: 12px; }
-  .grand-total {
-    background: #065f46; color: #fff; border-radius: 14px; padding: 12px 16px;
-    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
-  }
-  .grand-total .k { font-size: 13.5px; opacity: .9; }
-  .grand-total .v { font-size: 22px; font-weight: 800; }
   .del-all {
     width: 100%; padding: 11px; border-radius: 12px; font-size: 14px; font-weight: 700;
     background: #fef2f2; color: #dc2626; border: 1.5px solid #fecaca;
@@ -137,14 +131,6 @@
     padding: 5px 10px; font-size: 12px; font-weight: 700; color: #43554d;
   }
   .wd.on { border-color: #047857; color: #047857; background: #ecfdf5; }
-
-  .totals {
-    margin-top: 12px; background: #065f46; color: #fff; border-radius: 14px;
-    padding: 12px 16px; display: flex; gap: 10px; text-align: center;
-  }
-  .totals .cell { flex: 1; }
-  .totals .v { font-size: 21px; font-weight: 800; display: block; }
-  .totals .k { font-size: 11.5px; opacity: .85; }
 
   textarea.note {
     width: 100%; margin-top: 10px; border: 1.5px solid #d7e0db; border-radius: 12px;
@@ -224,11 +210,6 @@
       </div>
     </div>
 
-    <div class="totals">
-      <div class="cell"><span class="v" id="areaM">۰</span><span class="k">متراژ (متر)</span></div>
-    </div>
-    <div class="saved" id="pairHint"></div>
-
     <div class="saved" id="savedLbl"></div>
   </section>
 </main>
@@ -301,10 +282,8 @@ function renderList() {
     return;
   }
   listBox.innerHTML = '';
-  const grandM = sheets.reduce((s, sh) => s + sheetAreaM(sh.labels, sh.strokes), 0);
   const head = document.createElement('div');
   head.className = 'list-head';
-  head.innerHTML = '<div class="grand-total"><span class="k">متراژ کل همه برگه‌ها</span><span class="v">' + fmt(grandM, 3) + ' متر</span></div>';
   const delAll = document.createElement('button');
   delAll.className = 'del-all'; delAll.textContent = '🗑 حذف همه برگه‌ها';
   delAll.onclick = () => {
@@ -313,14 +292,13 @@ function renderList() {
   head.appendChild(delAll);
   listBox.appendChild(head);
   [...sheets].sort((a, b) => b.updatedAt - a.updatedAt).forEach(sh => {
-    const areaM = sheetAreaM(sh.labels, sh.strokes);
     const dc = new Date(sh.createdAt), du = new Date(sh.updatedAt);
     const nameStr = toFa(dc.toLocaleDateString('fa-IR')) + ' · ساعت ' + toFa(dc.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }));
     const dateStr = toFa(du.toLocaleDateString('fa-IR'));
     const card = document.createElement('button');
     card.className = 'card';
     card.innerHTML = '<div class="ic">📐</div>' +
-      '<div class="t"><b></b><span>آخرین ویرایش: ' + dateStr + (areaM ? ' · متراژ ' + fmt(areaM, 3) + ' متر' : '') + '</span></div>';
+      '<div class="t"><b></b><span>آخرین ویرایش: ' + dateStr + '</span></div>';
     card.querySelector('b').textContent = nameStr;
     const del = document.createElement('span');
     del.className = 'del'; del.textContent = '🗑';
@@ -395,7 +373,7 @@ function render() {
     if (st.points.length === 1) ctx.lineTo(st.points[0][0] * w + 0.1, st.points[0][1] * h + 0.1);
     ctx.stroke();
   });
-  renderLabels(); updateTotals();
+  renderLabels();
   hint.style.display = (cur.strokes.length || cur.labels.length) ? 'none' :
     'block';
   hint.textContent = tool === 'num' ? 'روی شکل، کنار لبه‌ای که اندازه‌اش رو می‌خوای بنویسی، بزن' : 'با انگشت شکل رو بکش';
@@ -410,52 +388,6 @@ function renderLabels() {
     el.dataset.id = l.id;
     wrap.appendChild(el);
   });
-}
-
-/* متراژ یک شکل: برچسب روی لبه‌های بالا/پایین = طول، روی لبه‌های چپ/راست = عرض؛
-   متراژ = بزرگ‌ترین طول × بزرگ‌ترین عرض (اضلاع روبه‌رو تکراری حساب نمی‌شن).
-   اگه لبه‌ها مشخص نباشن: اندازه‌ها جفت‌جفت ضرب و جمع می‌شن. */
-function sheetAreaInfo(labels, strokes) {
-  labels = labels || [];
-  if (!labels.length) return { m: 0, len: 0, wid: 0, mode: 'none' };
-  let info = null;
-  if (strokes && strokes.length) {
-    let minX = 1, minY = 1, maxX = 0, maxY = 0, any = false;
-    strokes.forEach(st => (st.points || []).forEach(pt => {
-      any = true;
-      if (pt[0] < minX) minX = pt[0];
-      if (pt[0] > maxX) maxX = pt[0];
-      if (pt[1] < minY) minY = pt[1];
-      if (pt[1] > maxY) maxY = pt[1];
-    }));
-    if (any && maxX > minX && maxY > minY) {
-      const hs = [], vs = [];
-      labels.forEach(l => {
-        const dH = Math.min(l.y - minY, maxY - l.y);
-        const dV = Math.min(l.x - minX, maxX - l.x);
-        (dH <= dV ? hs : vs).push(+l.value || 0);
-      });
-      if (hs.length && vs.length) {
-        const len = Math.max.apply(null, hs), wid = Math.max.apply(null, vs);
-        info = { m: len * wid / 10000, len: len, wid: wid, mode: 'rect' };
-      }
-    }
-  }
-  if (!info) {
-    let cm2 = 0;
-    for (let i = 0; i + 1 < labels.length; i += 2) cm2 += (+labels[i].value || 0) * (+labels[i + 1].value || 0);
-    info = { m: cm2 / 10000, len: 0, wid: 0, mode: 'pairs' };
-  }
-  return info;
-}
-function sheetAreaM(labels, strokes) { return sheetAreaInfo(labels, strokes).m; }
-
-function updateTotals() {
-  const info = sheetAreaInfo(cur.labels, cur.strokes);
-  $('areaM').textContent = fmt(info.m, 3);
-  if (info.mode === 'rect') $('pairHint').textContent = 'طول ' + fmt(info.len) + ' × عرض ' + fmt(info.wid);
-  else if (cur.labels.length % 2 === 1) $('pairHint').textContent = 'یه اندازه جفت نداره و تو متراژ حساب نشده';
-  else $('pairHint').textContent = '';
 }
 
 /* ===== ابزارها ===== */
