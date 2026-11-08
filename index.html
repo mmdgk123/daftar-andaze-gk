@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#047857">
 <title>دفتر اندازه کناف</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -212,7 +212,6 @@
       <div class="cell"><span class="v" id="sheetsNeed">۰</span><span class="k">ورق لازم</span></div>
     </div>
 
-    <textarea class="note" id="noteInp" placeholder="یادداشت این برگه… (مثلاً: دریچه ۶۰×۶۰ دو تا)"></textarea>
     <div class="saved" id="savedLbl"></div>
   </section>
 </main>
@@ -223,7 +222,7 @@
 <div class="scrim" id="numScrim">
   <div class="sheet">
     <h3 id="numTitle">اندازه به سانتیمتر</h3>
-    <input type="number" id="numInp" inputmode="decimal" step="0.1" placeholder="مثلاً ۱۱۹٫۵">
+    <input type="text" id="numInp" inputmode="decimal" placeholder="مثلاً ۱۱۹٫۵" autocomplete="off">
     <div class="row">
       <button class="btn pri" id="numOk">ثبت</button>
       <button class="btn del" id="numDel" style="display:none">حذف عدد</button>
@@ -242,6 +241,18 @@ const fmt = (n, dec = 2) => {
   let s = (dec === 0) ? String(Math.round(v)) : String(v);
   return toFa(s);
 };
+/* تبدیل ورودی کاربر (ارقام فارسی/عربی و اعشار فارسی) به عدد */
+function parseNum(raw) {
+  if (raw == null) return NaN;
+  let s = String(raw).trim()
+    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/[٫٬,]/g, '.')
+    .replace(/[^0-9.]/g, '');
+  const parts = s.split('.');
+  if (parts.length > 2) s = parts[0] + '.' + parts.slice(1).join('');
+  return parseFloat(s);
+}
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 /* ===== ذخیره‌سازی ===== */
@@ -306,13 +317,10 @@ function openSheet(id) {
   listView.style.display = 'none'; editorView.style.display = 'block';
   $('newBtn').style.display = 'none'; $('backBtn').style.display = 'block';
   $('hdrTitle').textContent = 'برگه اندازه';
-  $('noteInp').value = cur.note || '';
   setTool('pen');
   requestAnimationFrame(() => { resizeCanvas(); render(); });
 }
 $('backBtn').onclick = () => { saveCur(); renderList(); };
-
-$('noteInp').addEventListener('input', e => { cur.note = e.target.value; saveCur(false); });
 
 let savedTimer = null;
 function saveCur(showTick = true) {
@@ -492,11 +500,15 @@ function openNumSheet(p, lbl) {
   $('numScrim').classList.add('open');
   setTimeout(() => $('numInp').focus(), 60);
 }
-function closeNumSheet() { $('numScrim').classList.remove('open'); }
+function closeNumSheet() {
+  $('numInp').blur();
+  $('numScrim').classList.remove('open');
+  window.scrollTo(0, 0);
+}
 $('numCancel').onclick = closeNumSheet;
 $('numScrim').addEventListener('click', e => { if (e.target === $('numScrim')) closeNumSheet(); });
 $('numOk').onclick = () => {
-  const v = parseFloat(String($('numInp').value).replace(/[۰-۹]/g, d => FA.indexOf(d)));
+  const v = parseNum($('numInp').value);
   if (isNaN(v) || v <= 0) { closeNumSheet(); return; }
   pushHistory();
   if (editingLbl) editingLbl.value = v;
