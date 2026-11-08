@@ -254,7 +254,8 @@
 const FA = '۰۱۲۳۴۵۶۷۸۹';
 const toFa = s => String(s).replace(/[0-9]/g, d => FA[d]).replace(/\./g, '٫');
 const fmt = (n, dec = 2) => {
-  let v = Math.round(n * 100) / 100;
+  const f = Math.pow(10, dec);
+  let v = Math.round(n * f) / f;
   let s = (dec === 0) ? String(Math.round(v)) : String(v);
   return toFa(s);
 };
@@ -303,7 +304,7 @@ function renderList() {
   const grandM = sheets.reduce((s, sh) => s + sheetAreaM(sh.labels, sh.strokes), 0);
   const head = document.createElement('div');
   head.className = 'list-head';
-  head.innerHTML = '<div class="grand-total"><span class="k">متراژ کل همه برگه‌ها</span><span class="v">' + fmt(grandM) + ' متر</span></div>';
+  head.innerHTML = '<div class="grand-total"><span class="k">متراژ کل همه برگه‌ها</span><span class="v">' + fmt(grandM, 3) + ' متر</span></div>';
   const delAll = document.createElement('button');
   delAll.className = 'del-all'; delAll.textContent = '🗑 حذف همه برگه‌ها';
   delAll.onclick = () => {
@@ -319,7 +320,7 @@ function renderList() {
     const card = document.createElement('button');
     card.className = 'card';
     card.innerHTML = '<div class="ic">📐</div>' +
-      '<div class="t"><b></b><span>آخرین ویرایش: ' + dateStr + (areaM ? ' · متراژ ' + fmt(areaM) + ' متر' : '') + '</span></div>';
+      '<div class="t"><b></b><span>آخرین ویرایش: ' + dateStr + (areaM ? ' · متراژ ' + fmt(areaM, 3) + ' متر' : '') + '</span></div>';
     card.querySelector('b').textContent = nameStr;
     const del = document.createElement('span');
     del.className = 'del'; del.textContent = '🗑';
@@ -451,7 +452,7 @@ function sheetAreaM(labels, strokes) { return sheetAreaInfo(labels, strokes).m; 
 
 function updateTotals() {
   const info = sheetAreaInfo(cur.labels, cur.strokes);
-  $('areaM').textContent = fmt(info.m);
+  $('areaM').textContent = fmt(info.m, 3);
   if (info.mode === 'rect') $('pairHint').textContent = 'طول ' + fmt(info.len) + ' × عرض ' + fmt(info.wid);
   else if (cur.labels.length % 2 === 1) $('pairHint').textContent = 'یه اندازه جفت نداره و تو متراژ حساب نشده';
   else $('pairHint').textContent = '';
