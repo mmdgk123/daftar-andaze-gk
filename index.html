@@ -31,6 +31,11 @@
   header .back { font-size: 22px; color: #fff; padding: 2px 6px; display: none; }
   header h1 { font-size: 18px; font-weight: 800; margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   header .pill { font-size: 11px; opacity: .85; font-weight: 500; }
+  header .upd {
+    background: rgba(255,255,255,.16); color: #fff; font-size: 12.5px; font-weight: 700;
+    padding: 7px 12px; border-radius: 999px; flex: none;
+  }
+  header .upd:disabled { opacity: .6; }
 
   main { padding: 14px 14px 110px; max-width: 640px; margin: 0 auto; }
 
@@ -180,6 +185,7 @@
 <header>
   <button class="back" id="backBtn" aria-label="برگشت">›</button>
   <h1 id="hdrTitle">دفتر اندازه کناف</h1>
+  <button class="upd" id="updBtn">⟳ بروزرسانی</button>
   <span class="pill">mmdGK</span>
 </header>
 
@@ -547,6 +553,23 @@ $('numDel').onclick = () => {
   pushHistory();
   cur.labels = cur.labels.filter(l => l.id !== editingLbl.id);
   closeNumSheet(); render(); saveCur();
+};
+
+/* ===== دکمه بروزرسانی: گرفتن نسخه تازه به‌زور ===== */
+$('updBtn').onclick = async () => {
+  const btn = $('updBtn');
+  btn.disabled = true; btn.textContent = 'در حال دریافت…';
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update();
+    }
+    if (window.caches) {
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k => caches.delete(k)));
+    }
+  } catch (e) {}
+  location.replace(location.pathname + '?u=' + Date.now());
 };
 
 /* ===== شروع ===== */
