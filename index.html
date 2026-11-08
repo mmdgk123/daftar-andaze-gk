@@ -221,7 +221,7 @@
 <div class="scrim" id="numScrim">
   <div class="sheet">
     <h3 id="numTitle">اندازه به سانتیمتر</h3>
-    <input type="text" id="numInp" inputmode="decimal" placeholder="مثلاً ۱۱۹٫۵" autocomplete="off">
+    <input type="text" id="numInp" inputmode="decimal" enterkeyhint="done" placeholder="مثلاً ۱۱۹٫۵" autocomplete="off">
     <div class="row">
       <button class="btn pri" id="numOk">ثبت</button>
       <button class="btn del" id="numDel" style="display:none">حذف عدد</button>
@@ -504,32 +504,60 @@ wrap.addEventListener('pointerup', e => {
 });
 
 /* ===== شیت عدد ===== */
-let pendingPos = null, editingLbl = null;
+let pendingPos = null, editingLbl = null, numCancelNext = false;
+/* شیت همیشه بالای کیبورد می‌مونه: فاصله پایین = ارتفاع کیبورد از روی visualViewport */
+function fitNumSheet() {
+  if (!window.visualViewport) return;
+  const vv = window.visualViewport;
+  const off = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  $('numScrim').style.paddingBottom = off + 'px';
+}
+if (window.visualViewport) {
+  visualViewport.addEventListener('resize', fitNumSheet);
+  visualViewport.addEventListener('scroll', fitNumSheet);
+}
 function openNumSheet(p, lbl) {
-  pendingPos = p; editingLbl = lbl;
+  pendingPos = p; editingLbl = lbl; numCancelNext = false;
   $('numTitle').textContent = lbl ? 'ویرایش اندازه (سانتیمتر)' : 'اندازه به سانتیمتر';
   $('numInp').value = lbl ? lbl.value : '';
   $('numDel').style.display = lbl ? 'block' : 'none';
   $('numScrim').classList.add('open');
+  fitNumSheet();
   // فوکوس هم‌گام با لمس کاربر تا کیبورد آیفون خودکار بالا بیاد
   try { $('numInp').focus({ preventScroll: true }); } catch (e) { $('numInp').focus(); }
-  setTimeout(() => { if (document.activeElement !== $('numInp')) $('numInp').focus(); }, 80);
+  setTimeout(() => { if (document.activeElement !== $('numInp')) $('numInp').focus(); fitNumSheet(); }, 80);
+  setTimeout(fitNumSheet, 350);
 }
 function closeNumSheet() {
   $('numInp').blur();
   $('numScrim').classList.remove('open');
+  $('numScrim').style.paddingBottom = '0px';
   window.scrollTo(0, 0);
 }
-$('numCancel').onclick = closeNumSheet;
-$('numScrim').addEventListener('click', e => { if (e.target === $('numScrim')) closeNumSheet(); });
-$('numOk').onclick = () => {
+function submitNum() {
+  if (!$('numScrim').classList.contains('open')) return;
   const v = parseNum($('numInp').value);
   if (isNaN(v) || v <= 0) { closeNumSheet(); return; }
   pushHistory();
   if (editingLbl) editingLbl.value = v;
   else cur.labels.push({ id: uid(), x: pendingPos.x, y: pendingPos.y, value: v });
   closeNumSheet(); render(); saveCur();
-};
+}
+$('numOk').onclick = submitNum;
+$('numInp').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); submitNum(); }
+});
+/* تیک ✓ کیبورد = بستن کیبورد = خروج فوکوس از اینپوت → خودش ثبت می‌شه
+   (مگر این که کاربر لغو/حذف/بیرون شیت رو زده باشه) */
+$('numInp').addEventListener('blur', () => {
+  if ($('numScrim').classList.contains('open') && !numCancelNext) submitNum();
+  numCancelNext = false;
+});
+$('numCancel').addEventListener('pointerdown', () => { numCancelNext = true; });
+$('numCancel').onclick = closeNumSheet;
+$('numDel').addEventListener('pointerdown', () => { numCancelNext = true; });
+$('numScrim').addEventListener('pointerdown', e => { if (e.target === $('numScrim')) numCancelNext = true; });
+$('numScrim').addEventListener('click', e => { if (e.target === $('numScrim')) closeNumSheet(); });
 $('numDel').onclick = () => {
   if (!editingLbl) return;
   pushHistory();
