@@ -1,10 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0090d0"/>
-  <g stroke="#ffffff" stroke-opacity="0.25" stroke-width="3">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00a6e6"/>
+      <stop offset="1" stop-color="#0072b0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <g stroke="#ffffff" stroke-opacity="0.16" stroke-width="2">
     <path d="M128 0v512M256 0v512M384 0v512M0 128h512M0 256h512M0 384h512"/>
   </g>
   <path d="M110 340 L110 150 L300 150 L300 250 L402 250 L402 372 L110 372 Z"
-        fill="none" stroke="#ffffff" stroke-width="22" stroke-linejoin="round"/>
-  <rect x="168" y="86" width="176" height="52" rx="26" fill="#ffffff"/>
-  <text x="256" y="126" font-family="sans-serif" font-size="36" font-weight="bold" fill="#0090d0" text-anchor="middle">119.5</text>
+        fill="none" stroke="#00325a" stroke-opacity="0.35" stroke-width="23" stroke-linejoin="round"
+        transform="translate(5 7)"/>
+  <path d="M110 340 L110 150 L300 150 L300 250 L402 250 L402 372 L110 372 Z"
+        fill="none" stroke="#ffffff" stroke-width="23" stroke-linejoin="round"/>
+  <rect x="171" y="84" width="170" height="54" rx="27" fill="#ffffff"/>
+  <text x="256" y="122" font-family="sans-serif" font-size="37" font-weight="bold" fill="#0070aa" text-anchor="middle">119.5</text>
 </svg>
