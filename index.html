@@ -207,10 +207,9 @@
     </div>
 
     <div class="totals">
-      <div class="cell"><span class="v" id="sumM">۰</span><span class="k">مجموع اندازه‌ها (متر)</span></div>
-      <div class="cell"><span class="v" id="sheetsExact">۰</span><span class="k">ورق دقیق (÷۳)</span></div>
-      <div class="cell"><span class="v" id="sheetsNeed">۰</span><span class="k">ورق لازم</span></div>
+      <div class="cell"><span class="v" id="areaM">۰</span><span class="k">متراژ (متر)</span></div>
     </div>
+    <div class="saved" id="pairHint"></div>
 
     <div class="saved" id="savedLbl"></div>
   </section>
@@ -284,14 +283,14 @@ function renderList() {
   }
   listBox.innerHTML = '';
   [...sheets].sort((a, b) => b.updatedAt - a.updatedAt).forEach(sh => {
-    const totalCm = sh.labels.reduce((s, l) => s + (+l.value || 0), 0);
+    const areaM = sheetAreaM(sh.labels);
     const dc = new Date(sh.createdAt), du = new Date(sh.updatedAt);
     const nameStr = toFa(dc.toLocaleDateString('fa-IR')) + ' · ساعت ' + toFa(dc.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }));
     const dateStr = toFa(du.toLocaleDateString('fa-IR'));
     const card = document.createElement('button');
     card.className = 'card';
     card.innerHTML = '<div class="ic">📐</div>' +
-      '<div class="t"><b></b><span>آخرین ویرایش: ' + dateStr + (totalCm ? ' · مجموع ' + fmt(totalCm / 100) + ' متر' : '') + '</span></div>';
+      '<div class="t"><b></b><span>آخرین ویرایش: ' + dateStr + (areaM ? ' · متراژ ' + fmt(areaM) + ' متر' : '') + '</span></div>';
     card.querySelector('b').textContent = nameStr;
     const del = document.createElement('span');
     del.className = 'del'; del.textContent = '🗑';
@@ -383,12 +382,17 @@ function renderLabels() {
   });
 }
 
+/* متراژ: اندازه‌ها دوتا دوتا (طول × عرض هر تیکه) ضرب و جمع می‌شن — خروجی به متر */
+function sheetAreaM(labels) {
+  let cm2 = 0;
+  for (let i = 0; i + 1 < labels.length; i += 2) cm2 += (+labels[i].value || 0) * (+labels[i + 1].value || 0);
+  return cm2 / 10000;
+}
+
 function updateTotals() {
-  const sumCm = cur.labels.reduce((s, l) => s + (+l.value || 0), 0);
-  const m = sumCm / 100;
-  $('sumM').textContent = fmt(m);
-  $('sheetsExact').textContent = fmt(m / 3);
-  $('sheetsNeed').textContent = toFa(Math.ceil(m / 3 || 0));
+  const m = sheetAreaM(cur.labels);
+  $('areaM').textContent = fmt(m);
+  $('pairHint').textContent = (cur.labels.length % 2 === 1) ? 'یه اندازه جفت نداره و تو متراژ حساب نشده' : '';
 }
 
 /* ===== ابزارها ===== */
