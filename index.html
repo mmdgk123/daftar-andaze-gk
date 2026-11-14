@@ -575,10 +575,6 @@ $('updBtn').onclick = async () => {
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg) await reg.update();
     }
-    if (window.caches) {
-      const ks = await caches.keys();
-      await Promise.all(ks.map(k => caches.delete(k)));
-    }
   } catch (e) {}
   location.replace(location.pathname + '?u=' + Date.now());
 };
@@ -586,6 +582,7 @@ $('updBtn').onclick = async () => {
 /* ===== شروع ===== */
 renderList();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 </script>
 </body>
 </html>
