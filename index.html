@@ -194,7 +194,6 @@
     <div class="toolbar">
       <button class="tool on" data-tool="pen"><span class="ti">✏️</span>قلم</button>
       <button class="tool" data-tool="num"><span class="ti">🔢</span>عدد</button>
-      <button class="tool" data-tool="rect"><span class="ti">▭</span>مستطیل</button>
       <button class="tool" id="dashBtn"><span class="ti">┅</span>نقطه‌چین</button>
       <button class="tool" id="undoBtn"><span class="ti">↩️</span>واگرد</button>
       <button class="tool" id="redoBtn"><span class="ti">↪️</span>از نو</button>
@@ -403,7 +402,6 @@ function render() {
     'block';
   hint.textContent =
     tool === 'num' ? 'روی شکل، کنار لبه‌ای که اندازه‌اش رو می‌خوای بنویسی، بزن' :
-    tool === 'rect' ? 'از یه گوشه انگشتت رو بکش تا گوشه‌ی روبه‌رو، بعد ول کن' :
     'با انگشت شکل رو بکش';
 }
 
@@ -469,13 +467,10 @@ $('flipBtn').onclick = () => {
 };
 
 /* ===== کشیدن ===== */
-let drawing = null, downAt = null, shaping = null;
+let drawing = null, downAt = null;
 function pos(e) {
   const r = wrap.getBoundingClientRect();
   return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, cx: e.clientX - r.left, cy: e.clientY - r.top };
-}
-function shapePoints(sh) {
-  return [[sh.x0, sh.y0], [sh.x1, sh.y0], [sh.x1, sh.y1], [sh.x0, sh.y1], [sh.x0, sh.y0]];
 }
 
 cv.addEventListener('pointerdown', e => {
@@ -487,39 +482,18 @@ cv.addEventListener('pointerdown', e => {
     cur.strokes.push(drawing);
     cv.setPointerCapture(e.pointerId);
     render();
-  } else if (tool === 'rect') {
-    preStroke = snapState();
-    shaping = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
-    cv.setPointerCapture(e.pointerId);
   }
 });
 cv.addEventListener('pointermove', e => {
-  const p = pos(e);
-  if (drawing) {
-    const last = drawing.points[drawing.points.length - 1];
-    if (Math.hypot(p.x - last[0], p.y - last[1]) > 0.004) { drawing.points.push([p.x, p.y]); render(); }
-  } else if (shaping) {
-    shaping.x1 = p.x; shaping.y1 = p.y;
-    render();
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    drawStroke({ color: PEN_COLOR, width: PEN_WIDTH, dash: dashOn, points: shapePoints(shaping) });
-  }
+  if (!drawing) return;
+  const p = pos(e), last = drawing.points[drawing.points.length - 1];
+  if (Math.hypot(p.x - last[0], p.y - last[1]) > 0.004) { drawing.points.push([p.x, p.y]); render(); }
 });
 cv.addEventListener('pointerup', e => {
   const p = pos(e);
   if (drawing) {
     if (drawing.points.length < 2) { cur.strokes.pop(); preStroke = null; } else pushHistoryBefore();
     drawing = null; render(); saveCur(); return;
-  }
-  if (shaping) {
-    const pts = shapePoints(shaping);
-    const asp = (cv.height / cv.width) || 1;
-    const wdt = Math.abs(pts[1][0] - pts[0][0]), hgt = Math.abs(pts[2][1] - pts[1][1]) * asp;
-    if (Math.max(wdt, hgt) > 0.02) {
-      cur.strokes.push({ color: PEN_COLOR, width: PEN_WIDTH, dash: dashOn, points: pts });
-      pushHistoryBefore();
-    } else preStroke = null;
-    shaping = null; render(); saveCur(); return;
   }
   const wasTap = downAt && Math.hypot(p.x - downAt.x, p.y - downAt.y) < 0.02;
   if (!wasTap) return;
