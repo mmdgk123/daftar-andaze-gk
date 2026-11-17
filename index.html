@@ -50,6 +50,7 @@
     background: #fff; border: 1px solid #e2e8e5; border-radius: 16px;
     padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px;
     box-shadow: 0 1px 3px rgba(16,40,30,.05); text-align: right; width: 100%;
+    cursor: pointer; font-family: inherit; color: inherit;
   }
   .card .ic {
     width: 44px; height: 44px; border-radius: 12px; flex: none;
@@ -287,15 +288,15 @@ const hint = $('hint');
 
 /* ===== فهرست ===== */
 function makeThumb(sh) {
-  const c = document.createElement('canvas');
-  c.className = 'thumb';
   const W = 96, H = 152;
+  const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
   g.lineCap = 'round'; g.lineJoin = 'round';
   sh.strokes.forEach(st => {
-    g.strokeStyle = st.color; g.lineWidth = Math.max(3, st.width * 1.2);
-    g.setLineDash(st.dash ? [10, 7] : []);
+    g.strokeStyle = st.color; g.lineWidth = Math.max(4, st.width * 1.4);
+    g.setLineDash(st.dash ? [11, 8] : []);
     g.beginPath();
     st.points.forEach((p, i) => { const x = p[0] * W, y = p[1] * H; i ? g.lineTo(x, y) : g.moveTo(x, y); });
     g.stroke();
@@ -303,9 +304,13 @@ function makeThumb(sh) {
   g.setLineDash([]);
   sh.labels.forEach(l => {
     g.fillStyle = '#0070aa';
-    g.beginPath(); g.arc(l.x * W, l.y * H, 5.5, 0, 7); g.fill();
+    g.beginPath(); g.arc(l.x * W, l.y * H, 6, 0, 7); g.fill();
   });
-  return c;
+  const img = document.createElement('img');
+  img.className = 'thumb';
+  img.alt = '';
+  img.src = c.toDataURL('image/png');
+  return img;
 }
 function renderList() {
   document.body.classList.remove('editing');
@@ -330,7 +335,7 @@ function renderList() {
     const dc = new Date(sh.createdAt), du = new Date(sh.updatedAt);
     const nameStr = toFa(dc.toLocaleDateString('fa-IR')) + ' · ساعت ' + toFa(dc.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }));
     const dateStr = toFa(du.toLocaleDateString('fa-IR'));
-    const card = document.createElement('button');
+    const card = document.createElement('div');
     card.className = 'card' + (sh.done ? ' is-done' : '');
     if (sh.strokes && sh.strokes.length) card.appendChild(makeThumb(sh));
     else {
