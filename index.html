@@ -109,11 +109,11 @@
   }
 
   .toolbar {
-    display: flex; gap: 6px; margin-top: 10px; background: #fff;
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; background: #fff;
     border: 1px solid #e2e8e5; border-radius: 14px; padding: 8px;
   }
   .tool {
-    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    flex: 1 1 17%; display: flex; flex-direction: column; align-items: center; gap: 2px;
     padding: 8px 2px; border-radius: 10px; font-size: 11.5px; font-weight: 500; color: #43554d;
   }
   .tool .ti { font-size: 19px; line-height: 1; }
@@ -192,25 +192,14 @@
     <div class="toolbar">
       <button class="tool on" data-tool="pen"><span class="ti">✏️</span>قلم</button>
       <button class="tool" data-tool="num"><span class="ti">🔢</span>عدد</button>
-      <button class="tool" data-tool="erase"><span class="ti">🧽</span>پاک‌کن</button>
+      <button class="tool" data-tool="rect"><span class="ti">▭</span>مستطیل</button>
+      <button class="tool" data-tool="square"><span class="ti">◼</span>مربع</button>
+      <button class="tool" id="dashBtn"><span class="ti">┅</span>نقطه‌چین</button>
       <button class="tool" id="undoBtn"><span class="ti">↩️</span>واگرد</button>
+      <button class="tool" id="redoBtn"><span class="ti">↪️</span>از نو</button>
       <button class="tool" id="flipBtn"><span class="ti">⇋</span>برگردوندن</button>
       <button class="tool" id="tidyBtn"><span class="ti">📐</span>مرتب‌سازی</button>
       <button class="tool danger" id="clearBtn"><span class="ti">🗑️</span>پاک‌کردن</button>
-    </div>
-
-    <div class="opts">
-      <div class="grp" id="colors">
-        <button class="sw on" data-c="#0070aa" style="background:#0070aa" aria-label="سبز"></button>
-        <button class="sw" data-c="#dc2626" style="background:#dc2626" aria-label="قرمز"></button>
-        <button class="sw" data-c="#2563eb" style="background:#2563eb" aria-label="آبی"></button>
-        <button class="sw" data-c="#111827" style="background:#111827" aria-label="مشکی"></button>
-      </div>
-      <div class="grp" id="widths">
-        <button class="wd" data-w="2">نازک</button>
-        <button class="wd on" data-w="3.5">معمولی</button>
-        <button class="wd" data-w="6">ضخیم</button>
-      </div>
     </div>
 
     <div class="saved" id="savedLbl"></div>
@@ -267,8 +256,9 @@ function persist() { localStorage.setItem(KEY, JSON.stringify(sheets)); }
 /* ===== وضعیت ===== */
 let cur = null;            // برگه فعلی
 let tool = 'pen';
-let color = '#0070aa', widthPt = 3.5;
-let history = [];
+const PEN_COLOR = '#0070aa', PEN_WIDTH = 3.5;
+let dashOn = false;
+let history = [], future = [];
 
 /* ===== المان‌ها ===== */
 const $ = id => document.getElementById(id);
@@ -324,7 +314,7 @@ $('newBtn').onclick = () => {
 
 function openSheet(id) {
   cur = sheets.find(s => s.id === id); if (!cur) return;
-  history = [];
+  history = []; future = [];
   listView.style.display = 'none'; editorView.style.display = 'block';
   $('newBtn').style.display = 'none'; $('backBtn').style.display = 'block';
   $('hdrTitle').textContent = 'برگه اندازه';
@@ -384,27 +374,36 @@ function drawGrid(w, h) {
   ctx.stroke();
 }
 
+function drawStroke(st) {
+  const w = cv.width, h = cv.height, dpr = window.devicePixelRatio || 1;
+  ctx.strokeStyle = st.color; ctx.lineWidth = st.width * dpr;
+  ctx.setLineDash(st.dash ? [16 * dpr, 11 * dpr] : []);
+  ctx.beginPath();
+  st.points.forEach((p, i) => {
+    const x = p[0] * w, y = p[1] * h;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  if (st.points.length === 1) ctx.lineTo(st.points[0][0] * w + 0.1, st.points[0][1] * h + 0.1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
 function render() {
   if (!cur) return;
   const w = cv.width, h = cv.height;
   ctx.clearRect(0, 0, w, h);
   drawGrid(w, h);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  cur.strokes.forEach(st => {
-    ctx.strokeStyle = st.color; ctx.lineWidth = st.width * (window.devicePixelRatio || 1);
-    ctx.beginPath();
-    st.points.forEach((p, i) => {
-      const x = p[0] * w, y = p[1] * h;
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    });
-    if (st.points.length === 1) ctx.lineTo(st.points[0][0] * w + 0.1, st.points[0][1] * h + 0.1);
-    ctx.stroke();
-  });
+  cur.strokes.forEach(drawStroke);
   renderLabels();
   $('scaleLbl').textContent = cur.cmPerUnit ? '📏 مقیاس فعاله — هر خونه‌ی شبکه = ۵ سانت' : '';
   hint.style.display = (cur.strokes.length || cur.labels.length) ? 'none' :
     'block';
-  hint.textContent = tool === 'num' ? 'روی شکل، کنار لبه‌ای که اندازه‌اش رو می‌خوای بنویسی، بزن' : 'با انگشت شکل رو بکش';
+  hint.textContent =
+    tool === 'num' ? 'روی شکل، کنار لبه‌ای که اندازه‌اش رو می‌خوای بنویسی، بزن' :
+    tool === 'rect' ? 'از یه گوشه انگشتت رو بکش تا گوشه‌ی روبه‌رو، بعد ول کن' :
+    tool === 'square' ? 'بکش تا یه مربع ساخته بشه، بعد ول کن' :
+    'با انگشت شکل رو بکش';
 }
 
 function renderLabels() {
@@ -425,23 +424,28 @@ function setTool(t) {
   render();
 }
 document.querySelectorAll('.tool[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
-document.querySelectorAll('#colors .sw').forEach(b => b.onclick = () => {
-  color = b.dataset.c;
-  document.querySelectorAll('#colors .sw').forEach(x => x.classList.toggle('on', x === b));
-  setTool('pen');
-});
-document.querySelectorAll('#widths .wd').forEach(b => b.onclick = () => {
-  widthPt = +b.dataset.w;
-  document.querySelectorAll('#widths .wd').forEach(x => x.classList.toggle('on', x === b));
-});
+$('dashBtn').onclick = () => {
+  dashOn = !dashOn;
+  $('dashBtn').classList.toggle('on', dashOn);
+};
 
+function snapState() { return JSON.stringify({ strokes: cur.strokes, labels: cur.labels, cm: cur.cmPerUnit || null }); }
+function applyState(s) { cur.strokes = s.strokes; cur.labels = s.labels; cur.cmPerUnit = s.cm || null; }
 function pushHistory() {
-  history.push(JSON.stringify({ strokes: cur.strokes, labels: cur.labels }));
+  history.push(snapState());
   if (history.length > 40) history.shift();
+  future = [];
 }
 $('undoBtn').onclick = () => {
   const last = history.pop(); if (!last) return;
-  const s = JSON.parse(last); cur.strokes = s.strokes; cur.labels = s.labels;
+  future.push(snapState());
+  applyState(JSON.parse(last));
+  render(); saveCur();
+};
+$('redoBtn').onclick = () => {
+  const nxt = future.pop(); if (!nxt) return;
+  history.push(snapState());
+  applyState(JSON.parse(nxt));
   render(); saveCur();
 };
 $('clearBtn').onclick = () => {
@@ -688,34 +692,56 @@ $('tidyBtn').onclick = () => {
   if (closed) out.push(out[0].slice());
   const insertAt = Math.min.apply(null, chained.idxs);
   cur.strokes = cur.strokes.filter((_, i) => chained.idxs.indexOf(i) < 0);
-  cur.strokes.splice(Math.min(insertAt, cur.strokes.length), 0, { color: st.color, width: st.width, points: out });
+  cur.strokes.splice(Math.min(insertAt, cur.strokes.length), 0, { color: st.color, width: st.width, dash: !!st.dash, points: out });
   if (fitted) cur.cmPerUnit = cmPerUnit;
   render(); saveCur(false);
   flashMsg(fitted ? 'شکل با اندازه‌ها تنظیم شد ✓' : 'شکل مرتب شد ✓');
 };
 
 /* ===== کشیدن ===== */
-let drawing = null, downAt = null;
+let drawing = null, downAt = null, shaping = null;
 function pos(e) {
   const r = wrap.getBoundingClientRect();
   return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, cx: e.clientX - r.left, cy: e.clientY - r.top };
+}
+function shapePoints(sh) {
+  const asp = (cv.height / cv.width) || 1;
+  let x1 = sh.x1, y1 = sh.y1;
+  if (sh.kind === 'square') {
+    const dx = x1 - sh.x0, dyi = (y1 - sh.y0) * asp;
+    const side = Math.max(Math.abs(dx), Math.abs(dyi));
+    x1 = sh.x0 + (dx < 0 ? -side : side);
+    y1 = sh.y0 + (dyi < 0 ? -side : side) / asp;
+  }
+  return [[sh.x0, sh.y0], [x1, sh.y0], [x1, y1], [sh.x0, y1], [sh.x0, sh.y0]];
 }
 
 cv.addEventListener('pointerdown', e => {
   if (!cur) return;
   const p = pos(e); downAt = p;
   if (tool === 'pen') {
-    preStroke = JSON.stringify({ strokes: cur.strokes, labels: cur.labels });
-    drawing = { color, width: widthPt, points: [[p.x, p.y]] };
+    preStroke = snapState();
+    drawing = { color: PEN_COLOR, width: PEN_WIDTH, dash: dashOn, points: [[p.x, p.y]] };
     cur.strokes.push(drawing);
     cv.setPointerCapture(e.pointerId);
     render();
+  } else if (tool === 'rect' || tool === 'square') {
+    preStroke = snapState();
+    shaping = { kind: tool, x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    cv.setPointerCapture(e.pointerId);
   }
 });
 cv.addEventListener('pointermove', e => {
-  if (!drawing) return;
-  const p = pos(e), last = drawing.points[drawing.points.length - 1];
-  if (Math.hypot(p.x - last[0], p.y - last[1]) > 0.004) { drawing.points.push([p.x, p.y]); render(); }
+  const p = pos(e);
+  if (drawing) {
+    const last = drawing.points[drawing.points.length - 1];
+    if (Math.hypot(p.x - last[0], p.y - last[1]) > 0.004) { drawing.points.push([p.x, p.y]); render(); }
+  } else if (shaping) {
+    shaping.x1 = p.x; shaping.y1 = p.y;
+    render();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    drawStroke({ color: PEN_COLOR, width: PEN_WIDTH, dash: dashOn, points: shapePoints(shaping) });
+  }
 });
 cv.addEventListener('pointerup', e => {
   const p = pos(e);
@@ -723,22 +749,24 @@ cv.addEventListener('pointerup', e => {
     if (drawing.points.length < 2) { cur.strokes.pop(); preStroke = null; } else pushHistoryBefore();
     drawing = null; render(); saveCur(); return;
   }
+  if (shaping) {
+    const pts = shapePoints(shaping);
+    const asp = (cv.height / cv.width) || 1;
+    const wdt = Math.abs(pts[1][0] - pts[0][0]), hgt = Math.abs(pts[2][1] - pts[1][1]) * asp;
+    if (Math.max(wdt, hgt) > 0.02) {
+      cur.strokes.push({ color: PEN_COLOR, width: PEN_WIDTH, dash: dashOn, points: pts });
+      pushHistoryBefore();
+    } else preStroke = null;
+    shaping = null; render(); saveCur(); return;
+  }
   const wasTap = downAt && Math.hypot(p.x - downAt.x, p.y - downAt.y) < 0.02;
   if (!wasTap) return;
   if (tool === 'num') openNumSheet(p, null);
-  else if (tool === 'erase') eraseAt(p);
 });
 
 /* نسخه قبل از شروع هر خط برای واگرد نگه داشته می‌شود */
 let preStroke = null;
-function pushHistoryBefore() { if (preStroke) { history.push(preStroke); if (history.length > 40) history.shift(); preStroke = null; } }
-
-function eraseAt(p) {
-  const li = cur.labels.findIndex(l => Math.hypot(l.x - p.x, l.y - p.y) < 0.07);
-  if (li >= 0) { pushHistory(); cur.labels.splice(li, 1); render(); saveCur(); return; }
-  const si = cur.strokes.findIndex(st => st.points.some(pt => Math.hypot(pt[0] - p.x, pt[1] - p.y) < 0.045));
-  if (si >= 0) { pushHistory(); cur.strokes.splice(si, 1); render(); saveCur(); }
-}
+function pushHistoryBefore() { if (preStroke) { history.push(preStroke); if (history.length > 40) history.shift(); future = []; preStroke = null; } }
 
 /* ===== برچسب عدد: لمس برای ویرایش، کشیدن برای جابه‌جایی ===== */
 let dragLbl = null, dragMoved = false, dragStart = null;
