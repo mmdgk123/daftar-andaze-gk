@@ -195,6 +195,7 @@
       <button class="tool" data-tool="erase"><span class="ti">🧽</span>پاک‌کن</button>
       <button class="tool" id="undoBtn"><span class="ti">↩️</span>واگرد</button>
       <button class="tool" id="flipBtn"><span class="ti">⇋</span>برگردوندن</button>
+      <button class="tool" id="tidyBtn"><span class="ti">📐</span>مرتب‌سازی</button>
       <button class="tool danger" id="clearBtn"><span class="ti">🗑️</span>پاک‌کردن</button>
     </div>
 
@@ -213,6 +214,7 @@
     </div>
 
     <div class="saved" id="savedLbl"></div>
+    <div class="saved" id="scaleLbl" style="color:#0070aa;font-weight:700"></div>
   </section>
 </main>
 
@@ -351,7 +353,30 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 
 function drawGrid(w, h) {
-  const step = 24 * (window.devicePixelRatio || 1);
+  const dpr = window.devicePixelRatio || 1;
+  if (cur && cur.cmPerUnit) {
+    /* شبکه واقعی: هر خونه ۵ سانت، خط پررنگ هر ۲۵ سانت */
+    const cell = 5 * w / cur.cmPerUnit;
+    if (cell > 3) {
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = pass ? '#c3d9e2' : '#e7eff2'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        let i = 0;
+        for (let x = cell; x < w; x += cell, i++) {
+          if ((i % 5 === 4) !== !!pass) continue;
+          ctx.moveTo(x, 0); ctx.lineTo(x, h);
+        }
+        i = 0;
+        for (let y = cell; y < h; y += cell, i++) {
+          if ((i % 5 === 4) !== !!pass) continue;
+          ctx.moveTo(0, y); ctx.lineTo(w, y);
+        }
+        ctx.stroke();
+      }
+      return;
+    }
+  }
+  const step = 24 * dpr;
   ctx.strokeStyle = '#e3ece7'; ctx.lineWidth = 1;
   ctx.beginPath();
   for (let x = step; x < w; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
@@ -376,6 +401,7 @@ function render() {
     ctx.stroke();
   });
   renderLabels();
+  $('scaleLbl').textContent = cur.cmPerUnit ? '📏 مقیاس فعاله — هر خونه‌ی شبکه = ۵ سانت' : '';
   hint.style.display = (cur.strokes.length || cur.labels.length) ? 'none' :
     'block';
   hint.textContent = tool === 'num' ? 'روی شکل، کنار لبه‌ای که اندازه‌اش رو می‌خوای بنویسی، بزن' : 'با انگشت شکل رو بکش';
@@ -421,7 +447,7 @@ $('undoBtn').onclick = () => {
 $('clearBtn').onclick = () => {
   if (!cur.strokes.length && !cur.labels.length) return;
   if (!confirm('همه خط‌ها و عددهای این برگه پاک بشن؟')) return;
-  pushHistory(); cur.strokes = []; cur.labels = []; render(); saveCur();
+  pushHistory(); cur.strokes = []; cur.labels = []; cur.cmPerUnit = null; render(); saveCur();
 };
 /* برگردوندن آینه‌ای نقشه (چپ و راست عوض می‌شن) — برای وقتی نقشه از پشت صفحه کشیده شده
    و صفحه برای برش رو به روست؛ با هر زدن دوباره برمی‌گرده. */
@@ -435,6 +461,171 @@ $('flipBtn').onclick = () => {
   $('savedLbl').textContent = 'نقشه برگردونده شد ⇋';
   clearTimeout(flipTimer);
   flipTimer = setTimeout(() => $('savedLbl').textContent = '', 1600);
+};
+
+/* ===== مرتب‌سازی شکل =====
+   لبه‌های کجِ دست‌کشیده صاف و گوشه‌ها گونیا می‌شن؛ اگه روی ضلع‌ها اندازه
+   خورده باشه، شکل با همون اندازه‌ها تنظیم و مقیاس واقعی (هر خونه = ۵ سانت) فعال می‌شه. */
+let tidyTimer = null;
+function flashMsg(msg) {
+  $('savedLbl').textContent = msg;
+  clearTimeout(tidyTimer);
+  tidyTimer = setTimeout(() => $('savedLbl').textContent = '', 2400);
+}
+function dpSimplify(pts, eps) {
+  if (pts.length < 3) return pts.slice();
+  const keep = new Array(pts.length).fill(false);
+  keep[0] = keep[pts.length - 1] = true;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const ab = stack.pop(), a = ab[0], b = ab[1];
+    const A = pts[a], B = pts[b];
+    const dx = B[0] - A[0], dy = B[1] - A[1];
+    const L = Math.hypot(dx, dy) || 1e-9;
+    let dmax = 0, idx = -1;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs((pts[i][0] - A[0]) * dy - (pts[i][1] - A[1]) * dx) / L;
+      if (d > dmax) { dmax = d; idx = i; }
+    }
+    if (dmax > eps && idx > 0) { keep[idx] = true; stack.push([a, idx], [idx, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+function ringSimplify(R, eps) {
+  /* ساده‌سازی حلقه بسته: از دورترین نقطه نسبت به شروع شکسته می‌شه تا الگوریتم خراب نشه */
+  let f = 0, fd = -1;
+  for (let i = 1; i < R.length; i++) {
+    const d = Math.hypot(R[i][0] - R[0][0], R[i][1] - R[0][1]);
+    if (d > fd) { fd = d; f = i; }
+  }
+  const Q = R.slice(f).concat(R.slice(0, f));
+  Q.push(Q[0].slice());
+  const keep = new Array(Q.length).fill(false);
+  keep[0] = keep[Q.length - 1] = true;
+  let m = 0, md = -1;
+  for (let i = 1; i < Q.length - 1; i++) {
+    const d = Math.hypot(Q[i][0] - Q[0][0], Q[i][1] - Q[0][1]);
+    if (d > md) { md = d; m = i; }
+  }
+  keep[m] = true;
+  const stack = [[0, m], [m, Q.length - 1]];
+  while (stack.length) {
+    const ab = stack.pop(), a = ab[0], b = ab[1];
+    const A = Q[a], B = Q[b];
+    const dx = B[0] - A[0], dy = B[1] - A[1];
+    const L = Math.hypot(dx, dy) || 1e-9;
+    let dmax = 0, idx = -1;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs((Q[i][0] - A[0]) * dy - (Q[i][1] - A[1]) * dx) / L;
+      if (d > dmax) { dmax = d; idx = i; }
+    }
+    if (dmax > eps && idx > 0) { keep[idx] = true; stack.push([a, idx], [idx, b]); }
+  }
+  const out = Q.filter((_, i) => keep[i]);
+  out.pop();
+  return out;
+}
+function orthoSnap(V, closed, strength) {
+  const n = V.length, m = closed ? n : n - 1;
+  for (let it = 0; it < 30; it++) {
+    for (let e = 0; e < m; e++) {
+      const a = V[e], b = V[(e + 1) % n];
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      if (Math.hypot(dx, dy) < 1e-6) continue;
+      const ang = Math.abs(Math.atan2(dy, dx));
+      const fromH = Math.min(ang, Math.PI - ang);
+      const fromV = Math.abs(Math.PI / 2 - ang);
+      if (fromH < 0.38) { const ym = (a[1] + b[1]) / 2; a[1] += (ym - a[1]) * strength; b[1] += (ym - b[1]) * strength; }
+      else if (fromV < 0.38) { const xm = (a[0] + b[0]) / 2; a[0] += (xm - a[0]) * strength; b[0] += (xm - b[0]) * strength; }
+    }
+  }
+}
+$('tidyBtn').onclick = () => {
+  if (!cur || !cur.strokes.length) { flashMsg('اول شکل رو بکش'); return; }
+  let si = 0, best = -1;
+  cur.strokes.forEach((st, i) => { if (st.points.length > best) { best = st.points.length; si = i; } });
+  const st = cur.strokes[si];
+  if (st.points.length < 8) { flashMsg('اول شکل رو بکش'); return; }
+  const asp = (cv.height / cv.width) || 1;
+  let P = st.points.map(p => [p[0], p[1] * asp]);
+  const closed = Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < 0.09;
+  if (closed) while (P.length > 3 && Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < 0.02) P.pop();
+  const R = [P[0]];
+  let acc = 0;
+  for (let i = 1; i <= P.length; i++) {
+    if (i === P.length && !closed) break;
+    const a = P[i - 1], b = P[i % P.length];
+    acc += Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (acc >= 0.008) { R.push(b); acc = 0; }
+  }
+  let V;
+  if (closed) {
+    while (R.length > 3 && Math.hypot(R[0][0] - R[R.length - 1][0], R[0][1] - R[R.length - 1][1]) < 0.02) R.pop();
+    V = ringSimplify(R, 0.016);
+  } else {
+    V = dpSimplify(R, 0.016);
+  }
+  if (V.length < (closed ? 3 : 2)) { flashMsg('شکل واضحی پیدا نشد'); return; }
+  pushHistory();
+  orthoSnap(V, closed, 0.5);
+  let fitted = false, cmPerUnit = null;
+  if (closed && cur.labels.length) {
+    const n = V.length, targets = new Map();
+    cur.labels.forEach(l => {
+      const lp = [l.x, l.y * asp];
+      let bi = -1, bd = 1e9;
+      for (let e = 0; e < n; e++) {
+        const a = V[e], b = V[(e + 1) % n];
+        const d = Math.hypot(lp[0] - (a[0] + b[0]) / 2, lp[1] - (a[1] + b[1]) / 2);
+        if (d < bd) { bd = d; bi = e; }
+      }
+      if (bi >= 0 && +l.value > 0) targets.set(bi, { v: +l.value, lbl: l });
+    });
+    if (targets.size) {
+      let s = 0;
+      targets.forEach((t, e) => {
+        const a = V[e], b = V[(e + 1) % V.length];
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (L > 1e-6) s = Math.max(s, t.v / L);
+      });
+      if (s > 0) {
+        const C = V.map(p => [p[0] * s, p[1] * s]);
+        for (let it = 0; it < 400; it++) {
+          targets.forEach((t, e) => {
+            const a = C[e], b = C[(e + 1) % C.length];
+            const dx = b[0] - a[0], dy = b[1] - a[1];
+            const L = Math.hypot(dx, dy); if (L < 1e-6) return;
+            const err = (L - t.v) / 2, ux = dx / L, uy = dy / L;
+            a[0] += ux * err; a[1] += uy * err;
+            b[0] -= ux * err; b[1] -= uy * err;
+          });
+          if (it % 25 === 0 && it < 300) orthoSnap(C, true, 0.35);
+        }
+        V = C.map(p => [p[0] / s, p[1] / s]);
+        cmPerUnit = s; fitted = true;
+        targets.forEach((t, e) => {
+          const a = V[e], b = V[(e + 1) % V.length];
+          t.lbl.x = (a[0] + b[0]) / 2; t.lbl.y = ((a[1] + b[1]) / 2) / asp;
+        });
+      }
+    }
+  }
+  const xs = V.map(p => p[0]), ys = V.map(p => p[1]);
+  const bw = Math.max.apply(null, xs) - Math.min.apply(null, xs);
+  const bh = Math.max.apply(null, ys) - Math.min.apply(null, ys);
+  let k = 1;
+  if (bw > 0.92) k = Math.min(k, 0.92 / bw);
+  if (bh > 0.92 * asp) k = Math.min(k, (0.92 * asp) / bh);
+  const cx = (Math.max.apply(null, xs) + Math.min.apply(null, xs)) / 2;
+  const cy = (Math.max.apply(null, ys) + Math.min.apply(null, ys)) / 2;
+  V = V.map(p => [0.5 + (p[0] - cx) * k, asp / 2 + (p[1] - cy) * k]);
+  if (fitted && k !== 1) cmPerUnit = cmPerUnit / k;
+  const out = V.map(p => [p[0], p[1] / asp]);
+  if (closed) out.push(out[0].slice());
+  cur.strokes[si] = { color: st.color, width: st.width, points: out };
+  if (fitted) cur.cmPerUnit = cmPerUnit;
+  render(); saveCur(false);
+  flashMsg(fitted ? 'شکل با اندازه‌ها تنظیم شد ✓' : 'شکل مرتب شد ✓');
 };
 
 /* ===== کشیدن ===== */
