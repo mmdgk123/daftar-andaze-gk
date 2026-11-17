@@ -57,8 +57,27 @@
   }
   .card .t { flex: 1; min-width: 0; }
   .card .t b { display: block; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card .t span { font-size: 12px; color: #6b7a73; }
+  .card .t span { font-size: 12px; color: #6b7a73; display: block; }
+  .card .t span.done-badge { color: #16a34a; font-weight: 700; }
   .card .del { color: #dc2626; font-size: 19px; padding: 8px; flex: none; }
+  .card .thumb {
+    width: 48px; height: 76px; border-radius: 10px; flex: none;
+    border: 1.5px solid #d7e0db; background: #fff;
+  }
+  .card .done-toggle {
+    width: 34px; height: 34px; border-radius: 50%; flex: none;
+    border: 2px solid #c8d4cd; background: #fff; color: transparent;
+    font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  }
+  .card .done-toggle.on { background: #16a34a; border-color: #16a34a; color: #fff; }
+  .card.is-done { border-color: #bbf7d0; background: #f0fdf4; }
+  .done-chip {
+    position: absolute; top: 8px; inset-inline-start: 8px; z-index: 6;
+    background: rgba(255,255,255,.94); border: 1.5px solid #c8d4cd; color: #43554d;
+    font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(6,60,44,.12);
+  }
+  .done-chip.on { background: #16a34a; border-color: #16a34a; color: #fff; }
 
   .list-head { margin-bottom: 12px; }
   .del-all {
@@ -189,6 +208,7 @@
     <div class="canvas-wrap" id="wrap">
       <canvas id="cv"></canvas>
       <div class="hint" id="hint">با انگشت شکل رو بکش</div>
+      <button class="done-chip" id="doneBtn">✓ بریده شد</button>
     </div>
 
     <div class="toolbar">
@@ -266,6 +286,27 @@ const wrap = $('wrap'), cv = $('cv'), ctx = cv.getContext('2d');
 const hint = $('hint');
 
 /* ===== فهرست ===== */
+function makeThumb(sh) {
+  const c = document.createElement('canvas');
+  c.className = 'thumb';
+  const W = 96, H = 152;
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  sh.strokes.forEach(st => {
+    g.strokeStyle = st.color; g.lineWidth = Math.max(3, st.width * 1.2);
+    g.setLineDash(st.dash ? [10, 7] : []);
+    g.beginPath();
+    st.points.forEach((p, i) => { const x = p[0] * W, y = p[1] * H; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  });
+  g.setLineDash([]);
+  sh.labels.forEach(l => {
+    g.fillStyle = '#0070aa';
+    g.beginPath(); g.arc(l.x * W, l.y * H, 5.5, 0, 7); g.fill();
+  });
+  return c;
+}
 function renderList() {
   document.body.classList.remove('editing');
   listView.style.display = 'block'; editorView.style.display = 'none';
@@ -290,10 +331,27 @@ function renderList() {
     const nameStr = toFa(dc.toLocaleDateString('fa-IR')) + ' · ساعت ' + toFa(dc.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }));
     const dateStr = toFa(du.toLocaleDateString('fa-IR'));
     const card = document.createElement('button');
-    card.className = 'card';
-    card.innerHTML = '<div class="ic">📐</div>' +
-      '<div class="t"><b></b><span>آخرین ویرایش: ' + dateStr + '</span></div>';
-    card.querySelector('b').textContent = nameStr;
+    card.className = 'card' + (sh.done ? ' is-done' : '');
+    if (sh.strokes && sh.strokes.length) card.appendChild(makeThumb(sh));
+    else {
+      const ic = document.createElement('div');
+      ic.className = 'ic'; ic.textContent = '📐';
+      card.appendChild(ic);
+    }
+    const t = document.createElement('div');
+    t.className = 't';
+    t.innerHTML = '<b></b><span>آخرین ویرایش: ' + dateStr + '</span>' +
+      (sh.done ? '<span class="done-badge">✓ بریده شد</span>' : '');
+    t.querySelector('b').textContent = nameStr;
+    card.appendChild(t);
+    const dtg = document.createElement('span');
+    dtg.className = 'done-toggle' + (sh.done ? ' on' : '');
+    dtg.textContent = '✓';
+    dtg.onclick = e => {
+      e.stopPropagation();
+      sh.done = !sh.done; sh.updatedAt = Date.now(); persist(); renderList();
+    };
+    card.appendChild(dtg);
     const del = document.createElement('span');
     del.className = 'del'; del.textContent = '🗑';
     del.onclick = e => {
@@ -397,6 +455,7 @@ function render() {
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   cur.strokes.forEach(drawStroke);
   renderLabels();
+  $('doneBtn').classList.toggle('on', !!cur.done);
   $('scaleLbl').textContent = cur.cmPerUnit ? '📏 مقیاس فعاله — هر خونه‌ی شبکه = ۵ سانت' : '';
   hint.style.display = (cur.strokes.length || cur.labels.length) ? 'none' :
     'block';
@@ -446,6 +505,15 @@ $('redoBtn').onclick = () => {
   history.push(snapState());
   applyState(JSON.parse(nxt));
   render(); saveCur();
+};
+$('doneBtn').onclick = () => {
+  if (!cur) return;
+  cur.done = !cur.done;
+  $('doneBtn').classList.toggle('on', cur.done);
+  saveCur(false);
+  $('savedLbl').textContent = cur.done ? 'بریده شد ✓' : 'برش‌نخورده شد';
+  clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => $('savedLbl').textContent = '', 1400);
 };
 $('clearBtn').onclick = () => {
   if (!cur.strokes.length && !cur.labels.length) return;
