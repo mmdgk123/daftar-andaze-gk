@@ -1,4 +1,4 @@
-const CACHE = 'daftar-andaze-v21';
+const CACHE = 'daftar-andaze-v22';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', e => {
