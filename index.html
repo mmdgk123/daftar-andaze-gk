@@ -77,6 +77,8 @@
 
   /* ---------- ویرایشگر ---------- */
   #editorView { display: none; }
+  body.editing main { padding-bottom: 14px; }
+  body.editing #editorView { flex-direction: column; height: calc(100dvh - 118px); }
   .meta-row { display: flex; gap: 8px; margin-bottom: 10px; }
   .meta-row input[type="text"] {
     flex: 1; min-width: 0; border: 1.5px solid #d7e0db; border-radius: 12px;
@@ -93,7 +95,7 @@
   .canvas-wrap {
     position: relative; border-radius: 16px; overflow: hidden;
     border: 1.5px solid #cfdcd5; background: #fff;
-    height: min(58dvh, 520px); touch-action: none;
+    flex: 1 1 auto; min-height: 280px; touch-action: none;
   }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   .lbl {
@@ -193,12 +195,10 @@
       <button class="tool on" data-tool="pen"><span class="ti">✏️</span>قلم</button>
       <button class="tool" data-tool="num"><span class="ti">🔢</span>عدد</button>
       <button class="tool" data-tool="rect"><span class="ti">▭</span>مستطیل</button>
-      <button class="tool" data-tool="square"><span class="ti">◼</span>مربع</button>
       <button class="tool" id="dashBtn"><span class="ti">┅</span>نقطه‌چین</button>
       <button class="tool" id="undoBtn"><span class="ti">↩️</span>واگرد</button>
       <button class="tool" id="redoBtn"><span class="ti">↪️</span>از نو</button>
       <button class="tool" id="flipBtn"><span class="ti">⇋</span>برگردوندن</button>
-      <button class="tool" id="tidyBtn"><span class="ti">📐</span>مرتب‌سازی</button>
       <button class="tool danger" id="clearBtn"><span class="ti">🗑️</span>پاک‌کردن</button>
     </div>
 
@@ -268,6 +268,7 @@ const hint = $('hint');
 
 /* ===== فهرست ===== */
 function renderList() {
+  document.body.classList.remove('editing');
   listView.style.display = 'block'; editorView.style.display = 'none';
   $('newBtn').style.display = 'block'; $('backBtn').style.display = 'none';
   $('hdrTitle').textContent = 'دفتر اندازه کناف';
@@ -315,7 +316,8 @@ $('newBtn').onclick = () => {
 function openSheet(id) {
   cur = sheets.find(s => s.id === id); if (!cur) return;
   history = []; future = [];
-  listView.style.display = 'none'; editorView.style.display = 'block';
+  document.body.classList.add('editing');
+  listView.style.display = 'none'; editorView.style.display = 'flex';
   $('newBtn').style.display = 'none'; $('backBtn').style.display = 'block';
   $('hdrTitle').textContent = 'برگه اندازه';
   setTool('pen');
@@ -402,7 +404,6 @@ function render() {
   hint.textContent =
     tool === 'num' ? 'روی شکل، کنار لبه‌ای که اندازه‌اش رو می‌خوای بنویسی، بزن' :
     tool === 'rect' ? 'از یه گوشه انگشتت رو بکش تا گوشه‌ی روبه‌رو، بعد ول کن' :
-    tool === 'square' ? 'بکش تا یه مربع ساخته بشه، بعد ول کن' :
     'با انگشت شکل رو بکش';
 }
 
@@ -467,237 +468,6 @@ $('flipBtn').onclick = () => {
   flipTimer = setTimeout(() => $('savedLbl').textContent = '', 1600);
 };
 
-/* ===== مرتب‌سازی شکل =====
-   لبه‌های کجِ دست‌کشیده صاف و گوشه‌ها گونیا می‌شن؛ اگه روی ضلع‌ها اندازه
-   خورده باشه، شکل با همون اندازه‌ها تنظیم و مقیاس واقعی (هر خونه = ۵ سانت) فعال می‌شه. */
-let tidyTimer = null;
-function flashMsg(msg) {
-  $('savedLbl').textContent = msg;
-  clearTimeout(tidyTimer);
-  tidyTimer = setTimeout(() => $('savedLbl').textContent = '', 2400);
-}
-function dpSimplify(pts, eps) {
-  if (pts.length < 3) return pts.slice();
-  const keep = new Array(pts.length).fill(false);
-  keep[0] = keep[pts.length - 1] = true;
-  const stack = [[0, pts.length - 1]];
-  while (stack.length) {
-    const ab = stack.pop(), a = ab[0], b = ab[1];
-    const A = pts[a], B = pts[b];
-    const dx = B[0] - A[0], dy = B[1] - A[1];
-    const L = Math.hypot(dx, dy) || 1e-9;
-    let dmax = 0, idx = -1;
-    for (let i = a + 1; i < b; i++) {
-      const d = Math.abs((pts[i][0] - A[0]) * dy - (pts[i][1] - A[1]) * dx) / L;
-      if (d > dmax) { dmax = d; idx = i; }
-    }
-    if (dmax > eps && idx > 0) { keep[idx] = true; stack.push([a, idx], [idx, b]); }
-  }
-  return pts.filter((_, i) => keep[i]);
-}
-function ringSimplify(R, eps) {
-  /* ساده‌سازی حلقه بسته: از دورترین نقطه نسبت به شروع شکسته می‌شه تا الگوریتم خراب نشه */
-  let f = 0, fd = -1;
-  for (let i = 1; i < R.length; i++) {
-    const d = Math.hypot(R[i][0] - R[0][0], R[i][1] - R[0][1]);
-    if (d > fd) { fd = d; f = i; }
-  }
-  const Q = R.slice(f).concat(R.slice(0, f));
-  Q.push(Q[0].slice());
-  const keep = new Array(Q.length).fill(false);
-  keep[0] = keep[Q.length - 1] = true;
-  let m = 0, md = -1;
-  for (let i = 1; i < Q.length - 1; i++) {
-    const d = Math.hypot(Q[i][0] - Q[0][0], Q[i][1] - Q[0][1]);
-    if (d > md) { md = d; m = i; }
-  }
-  keep[m] = true;
-  const stack = [[0, m], [m, Q.length - 1]];
-  while (stack.length) {
-    const ab = stack.pop(), a = ab[0], b = ab[1];
-    const A = Q[a], B = Q[b];
-    const dx = B[0] - A[0], dy = B[1] - A[1];
-    const L = Math.hypot(dx, dy) || 1e-9;
-    let dmax = 0, idx = -1;
-    for (let i = a + 1; i < b; i++) {
-      const d = Math.abs((Q[i][0] - A[0]) * dy - (Q[i][1] - A[1]) * dx) / L;
-      if (d > dmax) { dmax = d; idx = i; }
-    }
-    if (dmax > eps && idx > 0) { keep[idx] = true; stack.push([a, idx], [idx, b]); }
-  }
-  const out = Q.filter((_, i) => keep[i]);
-  out.pop();
-  return out;
-}
-function dropStraight(V, closed) {
-  /* رأس‌های تقریباً روی خط راست (لرزش دست روی ضلع صاف) حذف می‌شن؛
-     گوشه‌های واقعی مثل پله سالم می‌مونن */
-  let changed = true, guard = 0;
-  while (changed && guard++ < 12 && V.length > (closed ? 3 : 2)) {
-    changed = false;
-    for (let i = 0; i < V.length; i++) {
-      if (!closed && (i === 0 || i === V.length - 1)) continue;
-      const a = V[(i - 1 + V.length) % V.length], b = V[i], c = V[(i + 1) % V.length];
-      const v1 = [b[0] - a[0], b[1] - a[1]], v2 = [c[0] - b[0], c[1] - b[1]];
-      const l1 = Math.hypot(v1[0], v1[1]), l2 = Math.hypot(v2[0], v2[1]);
-      if (l1 < 1e-6 || l2 < 1e-6) { V.splice(i, 1); changed = true; break; }
-      const cos = (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2);
-      if (cos > 0.94) { V.splice(i, 1); changed = true; break; }
-    }
-  }
-  return V;
-}
-function manhattan(V, closed, iters) {
-  /* هر ضلع رو کامل مجبور می‌کنه افقی یا عمودی بشه (بر اساس جهت غالبش) —
-     برش‌های صفحه تقریباً همیشه گونیا هستن، پس ضلع کجِ دست‌کشیده باید صاف بشه */
-  const n = V.length, m = closed ? n : n - 1;
-  for (let it = 0; it < (iters || 60); it++) {
-    for (let e = 0; e < m; e++) {
-      const a = V[e], b = V[(e + 1) % n];
-      const dx = b[0] - a[0], dy = b[1] - a[1];
-      if (Math.abs(dx) >= Math.abs(dy)) { const ym = (a[1] + b[1]) / 2; a[1] = ym; b[1] = ym; }
-      else { const xm = (a[0] + b[0]) / 2; a[0] = xm; b[0] = xm; }
-    }
-  }
-}
-function clusterSnap(V, thr) {
-  /* مختصات نزدیکِ رأس‌ها رو یکی می‌کنه: گوشه‌هایی که باید هم‌ردیف باشن، دقیق هم‌ردیف می‌شن */
-  for (let ax = 0; ax < 2; ax++) {
-    const vals = V.map(p => p[ax]).sort((a, b) => a - b);
-    const centers = [];
-    vals.forEach(v => {
-      const c = centers[centers.length - 1];
-      if (c && v - c.max <= thr) { c.sum += v; c.n++; c.max = v; }
-      else centers.push({ sum: v, n: 1, max: v });
-    });
-    const means = centers.map(c => c.sum / c.n);
-    V.forEach(p => {
-      let best = means[0], bd = 1e9;
-      means.forEach(mn => { const d = Math.abs(p[ax] - mn); if (d < bd) { bd = d; best = mn; } });
-      if (bd <= thr) p[ax] = best;
-    });
-  }
-}
-function chainOutline(strokes, asp) {
-  /* خط‌هایی که سر به سر به هم می‌رسن رو یه مسیر واحد می‌کنه
-     (شکل معمولاً با چند بار بلند کردن انگشت کشیده می‌شه) */
-  const items = strokes.map((st, i) => ({ i, pts: st.points.map(p => [p[0], p[1] * asp]) }));
-  items.sort((a, b) => b.pts.length - a.pts.length);
-  const used = new Set([items[0].i]);
-  let path = items[0].pts.slice();
-  const idxs = [items[0].i];
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const it of items) {
-      if (used.has(it.i)) continue;
-      const sp = it.pts, s0 = sp[0], s1 = sp[sp.length - 1];
-      const p0 = path[0], p1 = path[path.length - 1];
-      const cands = [
-        { d: Math.hypot(p1[0] - s0[0], p1[1] - s0[1]), act: () => { path = path.concat(sp.slice(1)); } },
-        { d: Math.hypot(p1[0] - s1[0], p1[1] - s1[1]), act: () => { path = path.concat(sp.slice(0, -1).reverse()); } },
-        { d: Math.hypot(p0[0] - s1[0], p0[1] - s1[1]), act: () => { path = sp.concat(path.slice(1)); } },
-        { d: Math.hypot(p0[0] - s0[0], p0[1] - s0[1]), act: () => { path = sp.slice().reverse().concat(path.slice(1)); } }
-      ];
-      cands.sort((a, b) => a.d - b.d);
-      if (cands[0].d < 0.30) { cands[0].act(); used.add(it.i); idxs.push(it.i); grew = true; }
-    }
-  }
-  return { path, idxs };
-}
-$('tidyBtn').onclick = () => {
-  if (!cur || !cur.strokes.length) { flashMsg('اول شکل رو بکش'); return; }
-  const totalPts = cur.strokes.reduce((a, s) => a + s.points.length, 0);
-  if (totalPts < 8) { flashMsg('اول شکل رو بکش'); return; }
-  const asp = (cv.height / cv.width) || 1;
-  const chained = chainOutline(cur.strokes, asp);
-  const st = cur.strokes[chained.idxs[0]];
-  let P = chained.path;
-  const closed = Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < (chained.idxs.length > 1 ? 0.30 : 0.09);
-  if (closed) while (P.length > 3 && Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < 0.02) P.pop();
-  const R = [P[0]];
-  let acc = 0;
-  for (let i = 1; i <= P.length; i++) {
-    if (i === P.length && !closed) break;
-    const a = P[i - 1], b = P[i % P.length];
-    acc += Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (acc >= 0.008) { R.push(b); acc = 0; }
-  }
-  let V;
-  if (closed) {
-    while (R.length > 3 && Math.hypot(R[0][0] - R[R.length - 1][0], R[0][1] - R[R.length - 1][1]) < 0.02) R.pop();
-    V = ringSimplify(R, 0.012);
-  } else {
-    V = dpSimplify(R, 0.012);
-  }
-  V = dropStraight(V, closed);
-  if (V.length < (closed ? 3 : 2)) { flashMsg('شکل واضحی پیدا نشد'); return; }
-  pushHistory();
-  if (closed) clusterSnap(V, 0.035);
-  manhattan(V, closed, 60);
-  V = dropStraight(V, closed);
-  let fitted = false, cmPerUnit = null;
-  if (closed && cur.labels.length) {
-    const n = V.length, targets = new Map();
-    cur.labels.forEach(l => {
-      const lp = [l.x, l.y * asp];
-      let bi = -1, bd = 1e9;
-      for (let e = 0; e < n; e++) {
-        const a = V[e], b = V[(e + 1) % n];
-        const d = Math.hypot(lp[0] - (a[0] + b[0]) / 2, lp[1] - (a[1] + b[1]) / 2);
-        if (d < bd) { bd = d; bi = e; }
-      }
-      if (bi >= 0 && +l.value > 0) targets.set(bi, { v: +l.value, lbl: l });
-    });
-    if (targets.size) {
-      let s = 0;
-      targets.forEach((t, e) => {
-        const a = V[e], b = V[(e + 1) % V.length];
-        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        if (L > 1e-6) s = Math.max(s, t.v / L);
-      });
-      if (s > 0) {
-        const C = V.map(p => [p[0] * s, p[1] * s]);
-        for (let it = 0; it < 400; it++) {
-          targets.forEach((t, e) => {
-            const a = C[e], b = C[(e + 1) % C.length];
-            const dx = b[0] - a[0], dy = b[1] - a[1];
-            const L = Math.hypot(dx, dy); if (L < 1e-6) return;
-            const err = (L - t.v) / 2, ux = dx / L, uy = dy / L;
-            a[0] += ux * err; a[1] += uy * err;
-            b[0] -= ux * err; b[1] -= uy * err;
-          });
-          if (it % 25 === 0 && it < 300) manhattan(C, true, 3);
-        }
-        V = C.map(p => [p[0] / s, p[1] / s]);
-        cmPerUnit = s; fitted = true;
-        targets.forEach((t, e) => {
-          const a = V[e], b = V[(e + 1) % V.length];
-          t.lbl.x = (a[0] + b[0]) / 2; t.lbl.y = ((a[1] + b[1]) / 2) / asp;
-        });
-      }
-    }
-  }
-  const xs = V.map(p => p[0]), ys = V.map(p => p[1]);
-  const bw = Math.max.apply(null, xs) - Math.min.apply(null, xs);
-  const bh = Math.max.apply(null, ys) - Math.min.apply(null, ys);
-  let k = 1;
-  if (bw > 0.92) k = Math.min(k, 0.92 / bw);
-  if (bh > 0.92 * asp) k = Math.min(k, (0.92 * asp) / bh);
-  const cx = (Math.max.apply(null, xs) + Math.min.apply(null, xs)) / 2;
-  const cy = (Math.max.apply(null, ys) + Math.min.apply(null, ys)) / 2;
-  V = V.map(p => [0.5 + (p[0] - cx) * k, asp / 2 + (p[1] - cy) * k]);
-  if (fitted && k !== 1) cmPerUnit = cmPerUnit / k;
-  const out = V.map(p => [p[0], p[1] / asp]);
-  if (closed) out.push(out[0].slice());
-  const insertAt = Math.min.apply(null, chained.idxs);
-  cur.strokes = cur.strokes.filter((_, i) => chained.idxs.indexOf(i) < 0);
-  cur.strokes.splice(Math.min(insertAt, cur.strokes.length), 0, { color: st.color, width: st.width, dash: !!st.dash, points: out });
-  if (fitted) cur.cmPerUnit = cmPerUnit;
-  render(); saveCur(false);
-  flashMsg(fitted ? 'شکل با اندازه‌ها تنظیم شد ✓' : 'شکل مرتب شد ✓');
-};
-
 /* ===== کشیدن ===== */
 let drawing = null, downAt = null, shaping = null;
 function pos(e) {
@@ -705,15 +475,7 @@ function pos(e) {
   return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, cx: e.clientX - r.left, cy: e.clientY - r.top };
 }
 function shapePoints(sh) {
-  const asp = (cv.height / cv.width) || 1;
-  let x1 = sh.x1, y1 = sh.y1;
-  if (sh.kind === 'square') {
-    const dx = x1 - sh.x0, dyi = (y1 - sh.y0) * asp;
-    const side = Math.max(Math.abs(dx), Math.abs(dyi));
-    x1 = sh.x0 + (dx < 0 ? -side : side);
-    y1 = sh.y0 + (dyi < 0 ? -side : side) / asp;
-  }
-  return [[sh.x0, sh.y0], [x1, sh.y0], [x1, y1], [sh.x0, y1], [sh.x0, sh.y0]];
+  return [[sh.x0, sh.y0], [sh.x1, sh.y0], [sh.x1, sh.y1], [sh.x0, sh.y1], [sh.x0, sh.y0]];
 }
 
 cv.addEventListener('pointerdown', e => {
@@ -725,9 +487,9 @@ cv.addEventListener('pointerdown', e => {
     cur.strokes.push(drawing);
     cv.setPointerCapture(e.pointerId);
     render();
-  } else if (tool === 'rect' || tool === 'square') {
+  } else if (tool === 'rect') {
     preStroke = snapState();
-    shaping = { kind: tool, x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    shaping = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
     cv.setPointerCapture(e.pointerId);
   }
 });
