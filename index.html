@@ -525,6 +525,24 @@ function ringSimplify(R, eps) {
   out.pop();
   return out;
 }
+function dropStraight(V, closed) {
+  /* رأس‌های تقریباً روی خط راست (لرزش دست روی ضلع صاف) حذف می‌شن؛
+     گوشه‌های واقعی مثل پله سالم می‌مونن */
+  let changed = true, guard = 0;
+  while (changed && guard++ < 12 && V.length > (closed ? 3 : 2)) {
+    changed = false;
+    for (let i = 0; i < V.length; i++) {
+      if (!closed && (i === 0 || i === V.length - 1)) continue;
+      const a = V[(i - 1 + V.length) % V.length], b = V[i], c = V[(i + 1) % V.length];
+      const v1 = [b[0] - a[0], b[1] - a[1]], v2 = [c[0] - b[0], c[1] - b[1]];
+      const l1 = Math.hypot(v1[0], v1[1]), l2 = Math.hypot(v2[0], v2[1]);
+      if (l1 < 1e-6 || l2 < 1e-6) { V.splice(i, 1); changed = true; break; }
+      const cos = (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2);
+      if (cos > 0.94) { V.splice(i, 1); changed = true; break; }
+    }
+  }
+  return V;
+}
 function orthoSnap(V, closed, strength) {
   const n = V.length, m = closed ? n : n - 1;
   for (let it = 0; it < 30; it++) {
@@ -540,15 +558,42 @@ function orthoSnap(V, closed, strength) {
     }
   }
 }
+function chainOutline(strokes, asp) {
+  /* خط‌هایی که سر به سر به هم می‌رسن رو یه مسیر واحد می‌کنه
+     (شکل معمولاً با چند بار بلند کردن انگشت کشیده می‌شه) */
+  const items = strokes.map((st, i) => ({ i, pts: st.points.map(p => [p[0], p[1] * asp]) }));
+  items.sort((a, b) => b.pts.length - a.pts.length);
+  const used = new Set([items[0].i]);
+  let path = items[0].pts.slice();
+  const idxs = [items[0].i];
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const it of items) {
+      if (used.has(it.i)) continue;
+      const sp = it.pts, s0 = sp[0], s1 = sp[sp.length - 1];
+      const p0 = path[0], p1 = path[path.length - 1];
+      const cands = [
+        { d: Math.hypot(p1[0] - s0[0], p1[1] - s0[1]), act: () => { path = path.concat(sp.slice(1)); } },
+        { d: Math.hypot(p1[0] - s1[0], p1[1] - s1[1]), act: () => { path = path.concat(sp.slice(0, -1).reverse()); } },
+        { d: Math.hypot(p0[0] - s1[0], p0[1] - s1[1]), act: () => { path = sp.concat(path.slice(1)); } },
+        { d: Math.hypot(p0[0] - s0[0], p0[1] - s0[1]), act: () => { path = sp.slice().reverse().concat(path.slice(1)); } }
+      ];
+      cands.sort((a, b) => a.d - b.d);
+      if (cands[0].d < 0.30) { cands[0].act(); used.add(it.i); idxs.push(it.i); grew = true; }
+    }
+  }
+  return { path, idxs };
+}
 $('tidyBtn').onclick = () => {
   if (!cur || !cur.strokes.length) { flashMsg('اول شکل رو بکش'); return; }
-  let si = 0, best = -1;
-  cur.strokes.forEach((st, i) => { if (st.points.length > best) { best = st.points.length; si = i; } });
-  const st = cur.strokes[si];
-  if (st.points.length < 8) { flashMsg('اول شکل رو بکش'); return; }
+  const totalPts = cur.strokes.reduce((a, s) => a + s.points.length, 0);
+  if (totalPts < 8) { flashMsg('اول شکل رو بکش'); return; }
   const asp = (cv.height / cv.width) || 1;
-  let P = st.points.map(p => [p[0], p[1] * asp]);
-  const closed = Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < 0.09;
+  const chained = chainOutline(cur.strokes, asp);
+  const st = cur.strokes[chained.idxs[0]];
+  let P = chained.path;
+  const closed = Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < (chained.idxs.length > 1 ? 0.30 : 0.09);
   if (closed) while (P.length > 3 && Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < 0.02) P.pop();
   const R = [P[0]];
   let acc = 0;
@@ -561,10 +606,11 @@ $('tidyBtn').onclick = () => {
   let V;
   if (closed) {
     while (R.length > 3 && Math.hypot(R[0][0] - R[R.length - 1][0], R[0][1] - R[R.length - 1][1]) < 0.02) R.pop();
-    V = ringSimplify(R, 0.016);
+    V = ringSimplify(R, 0.012);
   } else {
-    V = dpSimplify(R, 0.016);
+    V = dpSimplify(R, 0.012);
   }
+  V = dropStraight(V, closed);
   if (V.length < (closed ? 3 : 2)) { flashMsg('شکل واضحی پیدا نشد'); return; }
   pushHistory();
   orthoSnap(V, closed, 0.5);
@@ -622,7 +668,9 @@ $('tidyBtn').onclick = () => {
   if (fitted && k !== 1) cmPerUnit = cmPerUnit / k;
   const out = V.map(p => [p[0], p[1] / asp]);
   if (closed) out.push(out[0].slice());
-  cur.strokes[si] = { color: st.color, width: st.width, points: out };
+  const insertAt = Math.min.apply(null, chained.idxs);
+  cur.strokes = cur.strokes.filter((_, i) => chained.idxs.indexOf(i) < 0);
+  cur.strokes.splice(Math.min(insertAt, cur.strokes.length), 0, { color: st.color, width: st.width, points: out });
   if (fitted) cur.cmPerUnit = cmPerUnit;
   render(); saveCur(false);
   flashMsg(fitted ? 'شکل با اندازه‌ها تنظیم شد ✓' : 'شکل مرتب شد ✓');
