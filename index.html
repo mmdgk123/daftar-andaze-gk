@@ -543,19 +543,35 @@ function dropStraight(V, closed) {
   }
   return V;
 }
-function orthoSnap(V, closed, strength) {
+function manhattan(V, closed, iters) {
+  /* هر ضلع رو کامل مجبور می‌کنه افقی یا عمودی بشه (بر اساس جهت غالبش) —
+     برش‌های صفحه تقریباً همیشه گونیا هستن، پس ضلع کجِ دست‌کشیده باید صاف بشه */
   const n = V.length, m = closed ? n : n - 1;
-  for (let it = 0; it < 30; it++) {
+  for (let it = 0; it < (iters || 60); it++) {
     for (let e = 0; e < m; e++) {
       const a = V[e], b = V[(e + 1) % n];
       const dx = b[0] - a[0], dy = b[1] - a[1];
-      if (Math.hypot(dx, dy) < 1e-6) continue;
-      const ang = Math.abs(Math.atan2(dy, dx));
-      const fromH = Math.min(ang, Math.PI - ang);
-      const fromV = Math.abs(Math.PI / 2 - ang);
-      if (fromH < 0.38) { const ym = (a[1] + b[1]) / 2; a[1] += (ym - a[1]) * strength; b[1] += (ym - b[1]) * strength; }
-      else if (fromV < 0.38) { const xm = (a[0] + b[0]) / 2; a[0] += (xm - a[0]) * strength; b[0] += (xm - b[0]) * strength; }
+      if (Math.abs(dx) >= Math.abs(dy)) { const ym = (a[1] + b[1]) / 2; a[1] = ym; b[1] = ym; }
+      else { const xm = (a[0] + b[0]) / 2; a[0] = xm; b[0] = xm; }
     }
+  }
+}
+function clusterSnap(V, thr) {
+  /* مختصات نزدیکِ رأس‌ها رو یکی می‌کنه: گوشه‌هایی که باید هم‌ردیف باشن، دقیق هم‌ردیف می‌شن */
+  for (let ax = 0; ax < 2; ax++) {
+    const vals = V.map(p => p[ax]).sort((a, b) => a - b);
+    const centers = [];
+    vals.forEach(v => {
+      const c = centers[centers.length - 1];
+      if (c && v - c.max <= thr) { c.sum += v; c.n++; c.max = v; }
+      else centers.push({ sum: v, n: 1, max: v });
+    });
+    const means = centers.map(c => c.sum / c.n);
+    V.forEach(p => {
+      let best = means[0], bd = 1e9;
+      means.forEach(mn => { const d = Math.abs(p[ax] - mn); if (d < bd) { bd = d; best = mn; } });
+      if (bd <= thr) p[ax] = best;
+    });
   }
 }
 function chainOutline(strokes, asp) {
@@ -613,7 +629,9 @@ $('tidyBtn').onclick = () => {
   V = dropStraight(V, closed);
   if (V.length < (closed ? 3 : 2)) { flashMsg('شکل واضحی پیدا نشد'); return; }
   pushHistory();
-  orthoSnap(V, closed, 0.5);
+  if (closed) clusterSnap(V, 0.035);
+  manhattan(V, closed, 60);
+  V = dropStraight(V, closed);
   let fitted = false, cmPerUnit = null;
   if (closed && cur.labels.length) {
     const n = V.length, targets = new Map();
@@ -645,7 +663,7 @@ $('tidyBtn').onclick = () => {
             a[0] += ux * err; a[1] += uy * err;
             b[0] -= ux * err; b[1] -= uy * err;
           });
-          if (it % 25 === 0 && it < 300) orthoSnap(C, true, 0.35);
+          if (it % 25 === 0 && it < 300) manhattan(C, true, 3);
         }
         V = C.map(p => [p[0] / s, p[1] / s]);
         cmPerUnit = s; fitted = true;
