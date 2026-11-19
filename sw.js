@@ -1,44 +1,61 @@
-const CACHE = 'daftar-andaze-v24';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
+/* کش نگه‌داشتن برنامه برای استفاده‌ی آفلاین */
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+const CACHE = 'kanaf-v3-1';
+
+const ASSETS = [
+  './',
+  './index.html',
+  './styles.css',
+  './manifest.webmanifest',
+  './icon.svg',
+  './js/app.js',
+  './js/store.js',
+  './js/util.js',
+  './js/geometry.js',
+  './js/render.js',
+  './js/ui.js',
+  './js/list.js',
+  './js/sheet.js',
+  './fonts/Vazirmatn.woff2'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await Promise.all(ASSETS.map(url => cache.add(url).catch(() => {})));
+    await self.skipWaiting();
+  })());
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil((async () => {
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
-    /* خودترمیمی: اگه کش خالی یا ناقص شده بود، دوباره پرش کن */
-    try {
-      const c = await caches.open(CACHE);
-      if (!(await c.match('./index.html'))) await c.addAll(ASSETS);
-    } catch (err) {}
     await self.clients.claim();
   })());
 });
 
-/* network-first: همیشه تازه‌ترین نسخه، آفلاین از کش */
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith((async () => {
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  let url;
+  try { url = new URL(req.url); } catch (e) { return; }
+  if (url.origin !== location.origin) return;
+
+  event.respondWith((async () => {
     try {
-      const res = await fetch(e.request);
-      if (res && res.ok) {
+      /* اول شبکه تا نسخه‌ی تازه همیشه بیاید، بعد کش برای حالت آفلاین */
+      const res = await fetch(req);
+      if (res && res.ok){
         const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
       }
       return res;
-    } catch (err) {
-      const hit = await caches.match(e.request, { ignoreSearch: true });
-      if (hit) return hit;
-      /* باز شدن برنامه: هر طور شده پوسته‌ی ذخیره‌شده رو بده */
-      if (e.request.mode === 'navigate') {
-        const shell = (await caches.match('./index.html', { ignoreSearch: true })) ||
-                      (await caches.match('./', { ignoreSearch: true }));
-        if (shell) return shell;
-      }
-      throw err;
+    } catch (e) {
+      const cached = await caches.match(req);
+      if (cached) return cached;
+      const fallback = await caches.match('./index.html');
+      return fallback || Response.error();
     }
   })());
 });

@@ -1,1 +1,17 @@
-{"background_color":"#f4f6f5","description":"یادداشت اندازه و کشیدن شکل صفحات کناف","dir":"rtl","display":"standalone","icons":[{"purpose":"any","sizes":"any","src":"icon.svg","type":"image/svg+xml"}],"lang":"fa","name":"دفتر اندازه کناف","scope":"./","short_name":"اندازه کناف","start_url":"./index.html","theme_color":"#0090d0"}
+{
+  "name": "دفتر اندازه کناف",
+  "short_name": "اندازه کناف",
+  "description": "کشیدن شکل صفحات کناف، اندازه‌گیری خودکار ضلع‌ها و محاسبه‌ی مساحت و ورق لازم",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f1f5f4",
+  "theme_color": "#0f7c8a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
